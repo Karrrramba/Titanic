@@ -1,0 +1,92 @@
+---
+title: "Titanic_readme"
+author: "Michal Rackiewicz"
+date: "2023-09-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+### Load data sets
+
+```{r titanic data}
+train <- read.csv("train.csv")
+test <- read.csv("test.csv")
+```
+
+### Exploratory data analysis
+
+```{r}
+str(train)
+```
+
+First we will look at the summary statistics for each variable
+
+```{r}
+summary(train)
+```
+
+Let us also check the distribution of the dependent variable. By doing this we get an idea of how balanced the data set is and whether we have to do something to balance groups before modeling.
+
+```{r}
+train %>% 
+  select(Survived) %>% 
+  group_by(Survived) %>% 
+  summarise(n = n()) %>% 
+  mutate(Freq = paste0(round(100 * n/sum(n), 1), "%"))
+```
+
+We also want to check for missing values.
+
+```{r}
+train %>% 
+  summarise_all(list(~sum(is.na(.))))
+```
+
+We see that although "Age" is the only variable with missing values. We will replace blank cells and those containing only spaces, as well as zeros in Fare with NAs.
+
+```{r}
+train$Fare[train$Fare == 0] = NA
+```
+
+```{r}
+train <- train %>% 
+  mutate(across(everything(), ~gsub("^[[:space:]]*$", NA, .)))
+```
+
+```{r}
+train %>% 
+  summarise_all(list(~sum(is.na(.))))
+```
+
+Due to too many missing values, we will drop the Cabin column.
+
+```{r}
+train <- train %>% select(!Cabin)
+```
+
+Next we will look at the distributions of the numeric variables and separate categorical from continuous variables.
+```{r}
+
+```
+
+
+```{r numeric plots, echo=FALSE}
+train %>% 
+  select(where(is.numeric))%>%
+  hist.data.frame(.)
+```
+
+![](http://127.0.0.1:24923/chunk_output/s/67F32266/cbzakkcnjny6s/000012.png)
