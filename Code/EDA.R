@@ -53,13 +53,13 @@ train_categorical <- train %>%
   select(PassengerId, Pclass, SibSp, Parch, Embarked, Sex, Survived)
 
 
-# Plot distributions of continuous variables
+# Plot distributions of continuous variables as histograms/boxplots
 train_continuous %>% 
   melt() %>% 
   ggplot(aes(x=value))+
   geom_histogram()
 
-# Distribution of numeric variables
+# Distribution of numeric variables as bar plots
 train %>% 
   select(where(is.numeric))%>%
   hist.data.frame(.)
