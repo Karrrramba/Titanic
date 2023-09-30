@@ -77,7 +77,7 @@ Due to too many missing values, we will drop the Cabin column.
 train <- train %>% select(!Cabin)
 ```
 
-Next we will look at the distributions of the numeric variables and separate categorical from continuous variables.
+To better understand the dtaa, we will visualize the relationships between the variables, starting with a correlation matrix.
 ```{r}
 
 ```

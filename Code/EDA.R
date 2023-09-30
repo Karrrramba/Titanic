@@ -1,6 +1,7 @@
 library(tidyverse)
 library(Hmisc)
 library(reshape2)
+library(ggpol)
 library(egg)
 library(corrplot) #correlation matrix and plots
 library(caret) #regression
@@ -40,29 +41,120 @@ train %>%
 # Drop Cabin column due to too man missing values
 train <- train %>% select(!Cabin)
 
+# Next, we will transofrm the variables into the correct types.
+train <- train %>% 
+  mutate_at(c("Age", "Fare", "SibSp", "Parch"), as.numeric) %>%  
+  mutate_at(c("Survived", "Pclass", "Sex", "Embarked"), as.factor)
+
 # Check whether numerical variables are continuous or 
 train %>% 
   select(where(is.numeric)) %>% 
   sapply(., function(x) length(unique(x)))
 
-# Split variables into categorical and numerical
-train_continuous <- train %>% 
-  select(c(Fare, Age, Survived))
+# Visualisation----
+# Correlations between the variables
+correlation_matrix <- train %>%
+  select(!c(Name, PassengerId, Ticket)) %>%
+  mutate(across(where(is.factor), as.numeric)) %>%
+  filter(if_any(.cols = everything, ))
+  cor(as.matrix(.), method = "spearman")
 
-train_categorical <- train %>% 
-  select(PassengerId, Pclass, SibSp, Parch, Embarked, Sex, Survived)
+corrplot(correlation_matrix, method = "number")
+
+# Fare per class
+ggplot(train, aes(x = Pclass,
+                  y = Fare,
+                  fill = Pclass)) +
+  geom_boxplot() +
+  labs(title = "Fare in each passenger class",
+       y = "Fare",
+       x = "Class") +
+  theme_minimal()
+
+# Survived/Sex
+ggplot(train, aes(x = Pclass,
+                  fill = Survived)) +
+  geom_bar(stat="count",
+           width = 0.4,
+           position = position_dodge(width = 0.6)) +
+  labs(title = "Survival based on Passenger Class",
+       y = "Count",
+       x = "Class",
+       fill = "Survived") +
+  theme_minimal()
+
+#ParCh/Class 
+ggplot(train, aes(x = Parch,
+                  fill = Pclass)) +
+  geom_bar(stat="count",
+           width = 0.4,
+           position = position_dodge(width = 0.6)) +
+  labs(title = "Number of passengers traveling with parents/children",
+       y = "Count",
+       x = "Parents/Children",
+       fill = "Class") +
+  theme_minimal()
+
+# ParCh/Survival/Sex
+ggplot(train, aes(x = Parch, 
+                  fill = Survived)) +
+  geom_bar(aes(fill = Sex),
+           stat="count",
+           width = 0.4,
+           position = position_dodge(width = 0.6)) +
+  labs(title = "Survival and Age based on Class and Sex",
+       y = "Count",
+       x = "ParCh",
+       fill = "Survived") +
+  theme_minimal()
 
 
-# Plot distributions of continuous variables as histograms/boxplots
-train_continuous %>% 
-  melt() %>% 
-  ggplot(aes(x=value))+
-  geom_histogram()
 
-# Distribution of numeric variables as bar plots
+# Survival dependent on fare/Pclass? - 
 train %>% 
-  select(where(is.numeric))%>%
-  hist.data.frame(.)
+  ggplot(aes(x = Pclass, y = Age))+
+  geom_boxjitter(aes(fill = Sex),
+                 position = position_dodge(width = 0.8),
+                 width = 0.3,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4)+
+  labs(title = "Survival and Age based on Class and Sex",
+       y = "Age",
+       x = "Class",
+       fill = "Sex",
+       color = "Sex",
+       shape = "Survived")+
+  theme_minimal()
+
+
+
+  geom_violin(aes(fill = Sex),
+               position = position_dodge(width = 0.8),
+               width = 0.3)+
+  geom_jitter(aes(shape = Survived,
+                  color = Sex,
+                  group = Sex),
+              position = position_dodge(width = 0.2),
+              alpha = 0.6) +
+  labs(title = "Survival and Age based on Class and Sex",
+       y = "Age",
+       x = "Class",
+       fill = "Sex",
+       color = "Sex",
+       shape = "Survived")+
+  theme_minimal()
+
+# Age and sex + survival
+train %>% 
+  
+  
+# overlayed histogram of age
+# survival per class + sex
+# histogram of fare?
+# gender balance in survival per class?
 
 train %>% filter(Age != is.na(Age)) %>% ggplot()
 
@@ -73,7 +165,8 @@ train %>% filter(Age != is.na(Age)) %>% ggplot()
 # Continuous variables are plotted as 
 
 #plot age as stacked barplot with suvived as categorical variable
-plot1 <- ggplot(data = data, aes(x = Age, fill = factor(Survived))) +
+# plot1 <- 
+  ggplot(train, aes(x = Age, fill = Survived), alpha = 0.2) +
   geom_bar(stat="count", width = 1, position = "stack")+
   theme(legend.position = "none")
 
@@ -160,6 +253,11 @@ data %>%
   
 corr_matrix <- cor(as.matrix(data_age_groups %>% select(is.numeric)), method = "spearman")
 corrplot(corr_matrix, method = "number")
+
+corr_matrix
+
+train %>% 
+
 
 data_imputed <- data %>%
   group_by(Title) %>% 
