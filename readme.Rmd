@@ -19,11 +19,19 @@ plot(pressure)
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
-### Load data sets
+### Load packages and data 
+
+```{r}
+library(tidyverse)
+library(Hmisc)
+library(corrplot)
+library(ggpol)
+```
+
 
 ```{r titanic data}
-train <- read.csv("train.csv")
-test <- read.csv("test.csv")
+train <- read_csv("./Data/train.csv", col_types = "nffcfnnncnf")
+test <- read_csv("./Data/test.csv", col_types = "nffcfnnncnf")
 ```
 
 ### Exploratory data analysis
@@ -77,16 +85,102 @@ Due to too many missing values, we will drop the Cabin column.
 train <- train %>% select(!Cabin)
 ```
 
-To better understand the dtaa, we will visualize the relationships between the variables, starting with a correlation matrix.
-```{r}
 
-```
-
-
+Let's take a look at the distribution of the variables.
 ```{r numeric plots, echo=FALSE}
 train %>% 
   select(where(is.numeric))%>%
   hist.data.frame(.)
 ```
+We also want to consider the relationship between each variable and survival.
+```{r}
+str(train)
+```
 
-![](http://127.0.0.1:24923/chunk_output/s/67F32266/cbzakkcnjny6s/000012.png)
+```{r}
+train <- train %>% 
+  mutate(across(c(PassengerId, Age, SibSp, Parch, Fare), as.integer),
+         across(c(Survived, Pclass, Embarked, Sex), as.factor)
+         )
+```
+Let us now inspect the relationships between the variables.
+First, we will a plot a correlation map displaying linear relationship between the variables.
+```{r}
+correlation_matrix <- train %>%
+  select(!c(Name, PassengerId, Ticket)) %>%
+  mutate(across(where(is.factor), as.numeric)) %>%
+  filter(complete.cases(.)) %>% 
+  cor(as.matrix(.), method = "spearman")
+
+corrplot(correlation_matrix, 
+         method = "number",
+         type = "upper",
+         order = "hclust")
+```
+```{r, echo=FALSE}
+corrplot(correlation_matrix, 
+         method = "square",
+         type = "lower",
+         order = "FPC",
+         addCoef.col = 'black',
+         diag = FALSE
+         )
+```
+Let us now take a closer look at those variables which are correlated with survival.
+As expected sex is a stong of survival. Let us look at the numbers of survivors based on sex and passenger class.
+```{r, echo=FALSE}
+ggplot(train, aes(x = interaction(Pclass, Sex),
+           fill = Survived)) +
+  geom_bar(stat="count",
+           width = 0.4,
+           position = position_dodge(width = 0.6)) +
+  labs(title = "Survival based on Passenger Class and Sex",
+       y = "Count",
+       x = "Class/Sex",
+       fill = "Survived") +
+  theme_minimal()
+```
+
+```{r}
+train %>% 
+  filter(Survived == 1) %>%
+  ggplot(aes(x = Pclass, y = Age))+
+  geom_boxjitter(aes(fill = Sex),
+                 position = position_dodge(width = 0.8),
+                 width = 0.3,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4)+
+  labs(title = "Age of survivors based on Class and Sex",
+       y = "Age",
+       x = "Class",
+       fill = "Sex",
+       color = "Sex",
+       shape = "Survived")+
+  theme_minimal()
+```
+
+Passenger class and fare are strongly negatively correlated, i.e. the highest fares are found in class 1.
+```{r, echo=FALSE}
+ggplot(train, aes(x = Pclass,
+                  y = Fare,
+                  fill = Pclass)) +
+  geom_boxplot() +
+  labs(title = "Fare in each passenger class",
+       y = "Fare",
+       x = "Class") +
+  theme_minimal()
+```
+
+
+
+
+```{r}
+train %>% 
+  group_by(Survived) %>% 
+  summarise(across(c(Pclass, Sex, SibSp, Parch, Embarked), ~n()))
+  
+```
+
