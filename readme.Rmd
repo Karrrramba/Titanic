@@ -169,29 +169,54 @@ ggplot(train,
   theme_minimal()+
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
+We can infer that females - in general - are more likely to survive. Passenger class is also very import as we see a large proportion of deceased females passengers in the 3rd class with absolute number of female survivors across all three classes. For males the proportion of survivors is always skewed towards deceased. Male passengers in first class were much more likely to survive than in other classes. 
 
-If we look at the distribution of age based on survival we can see that 
+It is not apparent from the correlation map that age has any influence on survival. We do know however that children (and women) were more likely to be saved.
+From this information we can already infer that the relationship between survival and age is not linear as the likelihood of survival does not increase with age.
+Let us take a closer look at the distribution of survival rates across age for each sex.
 ```{r}
 ggplot(train,
        aes(x = Age)) +
   geom_histogram(aes(fill = Survived,
-                     alpha = 0.5)) +
+                     bin = 50),
+                 color = "black") +
   labs(title = "Age distribution of men in each class",
      y = "Age",
      x = "Class",
      fill = "Survived") +
-  facet_grid() +
+  facet_grid(Sex ~ .) +
   theme_minimal() +
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 
 
+Let us look at the age distribution for both sexes in each passenger class.
+```{r}
+train %>% 
+  ggplot(aes(x = Pclass, 
+             y = Age)) +
+  geom_boxjitter(aes(fill = Survived),
+                 position = position_dodge(width = 0.5),
+                 width = 0.4,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4) +
+  labs(title = "Age distribution of male passengers in each class",
+       y = "Age",
+       x = "Class",
+       fill = "Survived") +
+  facet_grid(~Sex) + 
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
 
 ```{r}
 train %>% 
   filter(Sex == "male") %>%
   ggplot(aes(x = Pclass, 
-             y = Age))+
+             y = Age)) +
   geom_boxjitter(aes(fill = Survived),
                  position = position_dodge(width = 0.8),
                  width = 0.3,
@@ -203,8 +228,8 @@ train %>%
   labs(title = "Age distribution of male passengers in each class",
        y = "Age",
        x = "Class",
-       fill = "Survived")+
-  theme_minimal()+
+       fill = "Survived") +
+  theme_minimal() +
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 
@@ -212,7 +237,7 @@ train %>%
 train %>% 
   filter(Sex == "female") %>%
   ggplot(aes(x = Pclass, 
-             y = Age))+
+             y = Age)) +
   geom_boxjitter(aes(fill = Survived),
                  position = position_dodge(width = 0.8),
                  width = 0.3,
@@ -220,12 +245,12 @@ train %>%
                  jitter.color = NA,
                  outlier.shape = 1,
                  errorbar.draw = TRUE,
-                 errorbar.length = 0.4)+
+                 errorbar.length = 0.4) +
   labs(title = "Age distribution of female passengers in each class",
        y = "Age",
        x = "Class",
-       fill = "Survived")+
-  theme_minimal()+
+       fill = "Survived") +
+  theme_minimal() +
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 
@@ -233,7 +258,7 @@ train %>%
 train %>% 
   filter(Survived == 1) %>%
   ggplot(aes(x = Pclass, 
-             y = Age))+
+             y = Age)) +
   geom_boxjitter(aes(fill = Sex),
                  position = position_dodge(width = 0.8),
                  width = 0.3,
@@ -241,17 +266,109 @@ train %>%
                  jitter.color = NA,
                  outlier.shape = 1,
                  errorbar.draw = TRUE,
-                 errorbar.length = 0.4)+
+                 errorbar.length = 0.4) +
   labs(title = "Age of survivors based on Class and Sex",
        y = "Age",
        x = "Class",
-       fill = "Sex")+
-  theme_minimal()+
+       fill = "Sex") +
+  theme_minimal() +
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 
-Passenger class and fare are strongly negatively correlated, i.e. the highest fares are found in class 1.
+Distribution of survivors based on the port of embarkation.
+```{r}
+train %>% 
+  filter(complete.cases(.)) %>% 
+  ggplot(aes(x = Embarked,
+           fill = Survived)) +
+    geom_bar() +
+    labs(title = "Number of survivors per port of embarkation",
+         y = "Count",
+         x = "City",
+         fill = "Survived") +
+    theme_minimal() +
+    scale_fill_manual(values = wes_palette("GrandBudapest1"))
+  
+```
 
+```{r}
+train %>% 
+  filter(complete.cases(.)) %>%
+  group_by(Embarked, Survived) %>%
+  summarise(count = n()) %>%
+  mutate(prop = count/sum(count)) %>%
+  ggplot(aes(x = Embarked, y = prop, fill = Survived)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Proportion of survivors per port of embarkation",
+       y = "Survivors [%]",
+       x = "City",
+       fill = "Survived") +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+
+
+It is apparent that the amount of survivors among the passengers embarking in Cherbourg is relatively higher than in Queenstown or Southhampton.
+From the correlation plot we know that this variable is correlated with passenger class.
+
+```{r}
+train %>% 
+  filter(complete.cases(.)) %>%
+  group_by(Embarked, Pclass) %>%
+  summarise(count = n()) %>%
+  mutate(prop = count/sum(count)) %>%
+  ggplot(aes(x = Embarked, y = prop, fill = Pclass)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Proportion of passengers in each class per port of embarkation",
+       y = "Passengers [%]",
+       x = "City",
+       fill = "Class") +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+  
+```
+We see that among the passengers embarking in Cherbourg, the majority belonged to class 1, while the vast majority of people embarking in Queensland (with the lowest proportion of survivors) were 3rd class passengers.
+
+
+```{r}
+train %>% 
+  filter(complete.cases(.)) %>%
+  ggplot(aes(x = Parch, fill = Sex)) +
+  geom_bar() +
+  labs(title = "Proportion passengers in each class per port of embarkation",
+       y = "Count",
+       x = "# of parents / children",
+       fill = "Sex") +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+Female passengers were more likely to travel with their parents/children.
+Distribution of parch among classes.
+
+```{r}
+train %>% 
+  filter(complete.cases(.)) %>%
+  ggplot(aes(x = Parch, fill = Pclass)) +
+  geom_bar(position = "dodge") +
+  facet_grid(Sex ~ .) + 
+  labs(title = "Numbers of passengers travelling with parents/children",
+       y = "Count",
+       x = "# of parents / children",
+       fill = "Class") +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+Most passengers were travelling without their children/parents. The absolute numbers are higher in men and 3rd class passengers.
+
+
+```{r}
+
+```
+
+
+
+Passenger class and fare are 
+They are, however, strongly negatively correlated with each other, i.e. the highest fares are found in class 1.
 ```{r, echo=FALSE}
 ggplot(train, aes(x = Pclass,
                   y = Fare,
@@ -263,6 +380,8 @@ ggplot(train, aes(x = Pclass,
   theme_minimal()+
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
+We should therefore consider removing one or the other as autocorrelated variables are likely to skew our predictive model.
+
 
 ```{r}
 train %>% 
