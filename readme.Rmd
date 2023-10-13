@@ -156,7 +156,8 @@ Correlation matrix with Age*Sex
 Let us now take a closer look at those variables which are correlated with survival. As expected sex is a strong predictor of survival. Let us look at the numbers of survivors based on sex and passenger class.
 
 ```{r, echo=FALSE}
-ggplot(train, aes(x = interaction(Pclass, Sex),
+ggplot(train, 
+       aes(x = interaction(Pclass, Sex),
            fill = Survived)) +
   geom_bar(stat="count",
            width = 0.4,
@@ -169,10 +170,70 @@ ggplot(train, aes(x = interaction(Pclass, Sex),
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 
+If we look at the distribution of age based on survival we can see that 
+```{r}
+ggplot(train,
+       aes(x = Age)) +
+  geom_histogram(aes(fill = Survived,
+                     alpha = 0.5)) +
+  labs(title = "Age distribution of men in each class",
+     y = "Age",
+     x = "Class",
+     fill = "Survived") +
+  facet_grid() +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+
+
+
+```{r}
+train %>% 
+  filter(Sex == "male") %>%
+  ggplot(aes(x = Pclass, 
+             y = Age))+
+  geom_boxjitter(aes(fill = Survived),
+                 position = position_dodge(width = 0.8),
+                 width = 0.3,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4)+
+  labs(title = "Age distribution of male passengers in each class",
+       y = "Age",
+       x = "Class",
+       fill = "Survived")+
+  theme_minimal()+
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+
+```{r}
+train %>% 
+  filter(Sex == "female") %>%
+  ggplot(aes(x = Pclass, 
+             y = Age))+
+  geom_boxjitter(aes(fill = Survived),
+                 position = position_dodge(width = 0.8),
+                 width = 0.3,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4)+
+  labs(title = "Age distribution of female passengers in each class",
+       y = "Age",
+       x = "Class",
+       fill = "Survived")+
+  theme_minimal()+
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+
 ```{r}
 train %>% 
   filter(Survived == 1) %>%
-  ggplot(aes(x = Pclass, y = Age))+
+  ggplot(aes(x = Pclass, 
+             y = Age))+
   geom_boxjitter(aes(fill = Sex),
                  position = position_dodge(width = 0.8),
                  width = 0.3,
@@ -184,15 +245,10 @@ train %>%
   labs(title = "Age of survivors based on Class and Sex",
        y = "Age",
        x = "Class",
-       fill = "Sex",
-       color = "Sex",
-       shape = "Survived")+
+       fill = "Sex")+
   theme_minimal()+
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
-If we look at the distribution of age based on survival we can see that 
-
-
 
 Passenger class and fare are strongly negatively correlated, i.e. the highest fares are found in class 1.
 
@@ -201,7 +257,7 @@ ggplot(train, aes(x = Pclass,
                   y = Fare,
                   fill = Pclass)) +
   geom_boxplot() +
-  labs(title = "Fare in each passenger class",
+  labs(title = "Fares per passenger class",
        y = "Fare",
        x = "Class") +
   theme_minimal()+
