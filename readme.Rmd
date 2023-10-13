@@ -19,7 +19,7 @@ plot(pressure)
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
-### Load packages and data 
+### Load packages and data
 
 ```{r}
 library(tidyverse)
@@ -27,7 +27,6 @@ library(Hmisc)
 library(corrplot)
 library(ggpol)
 ```
-
 
 ```{r titanic data}
 train <- read_csv("./Data/train.csv", col_types = "nffcfnnncnf")
@@ -86,13 +85,17 @@ train <- train %>% select(!Cabin)
 ```
 
 
-Let's take a look at the distribution of the variables.
+## Data visualization
+First, we will look at some basic plots of variable distributions and 
+
 ```{r numeric plots, echo=FALSE}
 train %>% 
   select(where(is.numeric))%>%
   hist.data.frame(.)
 ```
-We also want to consider the relationship between each variable and survival.
+
+
+
 ```{r}
 str(train)
 ```
@@ -103,20 +106,40 @@ train <- train %>%
          across(c(Survived, Pclass, Embarked, Sex), as.factor)
          )
 ```
-Let us now inspect the relationships between the variables.
-First, we will a plot a correlation map displaying linear relationship between the variables.
+
+```{r}
+pal_c <- wes_palette("GrandBudapest1", 21, type = "continuous")
+```
+
+
+Distributions of passenger IDs across passenger classes.
+
+```{r}
+train
+ggplot(train, aes(x = PassengerId,
+                  y = Pclass,
+                  fill = Pclass)) +
+  geom_jitter(shape = 21,
+             color = "white") +
+  labs(title = "Distirbution of passenger IDs",
+       y = "Class",
+       x = "Passenger ID",
+       fill = "Passenger class") +
+  theme_minimal()+
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+Since the passenger IDs are distributed uniformly across all classes we will remove it as it holds no predictive value.
+
+
+Let us also inspect the relationships between the variables. First, we will a plot a correlation map displaying linear relationship between the variables.
 ```{r}
 correlation_matrix <- train %>%
   select(!c(Name, PassengerId, Ticket)) %>%
   mutate(across(where(is.factor), as.numeric)) %>%
   filter(complete.cases(.)) %>% 
   cor(as.matrix(.), method = "spearman")
-
-corrplot(correlation_matrix, 
-         method = "number",
-         type = "upper",
-         order = "hclust")
 ```
+
 ```{r, echo=FALSE}
 corrplot(correlation_matrix, 
          method = "square",
@@ -126,8 +149,12 @@ corrplot(correlation_matrix,
          diag = FALSE
          )
 ```
-Let us now take a closer look at those variables which are correlated with survival.
-As expected sex is a stong of survival. Let us look at the numbers of survivors based on sex and passenger class.
+Correlation matrix with Age*Sex
+
+
+
+Let us now take a closer look at those variables which are correlated with survival. As expected sex is a strong predictor of survival. Let us look at the numbers of survivors based on sex and passenger class.
+
 ```{r, echo=FALSE}
 ggplot(train, aes(x = interaction(Pclass, Sex),
            fill = Survived)) +
@@ -138,7 +165,8 @@ ggplot(train, aes(x = interaction(Pclass, Sex),
        y = "Count",
        x = "Class/Sex",
        fill = "Survived") +
-  theme_minimal()
+  theme_minimal()+
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 
 ```{r}
@@ -159,10 +187,15 @@ train %>%
        fill = "Sex",
        color = "Sex",
        shape = "Survived")+
-  theme_minimal()
+  theme_minimal()+
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
+If we look at the distribution of age based on survival we can see that 
+
+
 
 Passenger class and fare are strongly negatively correlated, i.e. the highest fares are found in class 1.
+
 ```{r, echo=FALSE}
 ggplot(train, aes(x = Pclass,
                   y = Fare,
@@ -171,11 +204,9 @@ ggplot(train, aes(x = Pclass,
   labs(title = "Fare in each passenger class",
        y = "Fare",
        x = "Class") +
-  theme_minimal()
+  theme_minimal()+
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
-
-
-
 
 ```{r}
 train %>% 
@@ -183,4 +214,5 @@ train %>%
   summarise(across(c(Pclass, Sex, SibSp, Parch, Embarked), ~n()))
   
 ```
+
 
