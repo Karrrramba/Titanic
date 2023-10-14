@@ -2,22 +2,13 @@
 title: "Titanic_readme"
 author: "Michal Rackiewicz"
 date: "2023-09-29"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ### Load packages and data
 
@@ -26,6 +17,7 @@ library(tidyverse)
 library(Hmisc)
 library(corrplot)
 library(ggpol)
+library(wesanderson)
 ```
 
 ```{r titanic data}
@@ -61,8 +53,8 @@ We also want to check for missing values.
 train %>% 
   summarise_all(list(~sum(is.na(.))))
 ```
-
-We see that although "Age" is the only variable with missing values. We will replace blank cells and those containing only spaces, as well as zeros in Fare with NAs.
+We will deal with missing values later on. 
+We will replace blank cells and those containing only spaces, as well as zeros in Fare with NAs.
 
 ```{r}
 train$Fare[train$Fare == 0] = NA
@@ -107,14 +99,9 @@ train <- train %>%
          )
 ```
 
-```{r}
-pal_c <- wes_palette("GrandBudapest1", 21, type = "continuous")
-```
-
-
 Distributions of passenger IDs across passenger classes.
 
-```{r}
+```{r, echo=FALSE}
 train
 ggplot(train, aes(x = PassengerId,
                   y = Pclass,
@@ -149,9 +136,6 @@ corrplot(correlation_matrix,
          diag = FALSE
          )
 ```
-Correlation matrix with Age*Sex
-
-
 
 Let us now take a closer look at those variables which are correlated with survival. As expected sex is a strong predictor of survival. Let us look at the numbers of survivors based on sex and passenger class.
 
@@ -169,14 +153,15 @@ ggplot(train,
   theme_minimal()+
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
-We can infer that females - in general - are more likely to survive. Passenger class is also very import as we see a large proportion of deceased females passengers in the 3rd class with absolute number of female survivors across all three classes. For males the proportion of survivors is always skewed towards deceased. Male passengers in first class were much more likely to survive than in other classes. 
+We can infer that females - in general - are more likely to survive. Passenger class is also a good predictor as we see a large proportion of deceased female passengers in the 3rd class, although absolute numbers are roughly equal all three classes. For males the proportion of survivors is smaller irrespective of class. Male passengers in first class were much more likely to survive than in other classes. 
 
 It is not apparent from the correlation map that age has any influence on survival. We do know however that children (and women) were more likely to be saved.
 From this information we can already infer that the relationship between survival and age is not linear as the likelihood of survival does not increase with age.
 Let us take a closer look at the distribution of survival rates across age for each sex.
-```{r}
-ggplot(train,
-       aes(x = Age)) +
+```{r, echo=FALSE}
+train %>% 
+  filter(complete.cases(.)) %>% 
+  ggplot(aes(x = Age)) +
   geom_histogram(aes(fill = Survived,
                      bin = 50),
                  color = "black") +
@@ -191,8 +176,9 @@ ggplot(train,
 
 
 Let us look at the age distribution for both sexes in each passenger class.
-```{r}
+```{r, echo=FALSE}
 train %>% 
+  filter(complete.cases(.)) %>% 
   ggplot(aes(x = Pclass, 
              y = Age)) +
   geom_boxjitter(aes(fill = Survived),
@@ -276,7 +262,7 @@ train %>%
 ```
 
 Distribution of survivors based on the port of embarkation.
-```{r}
+```{r, echo=FALSE}
 train %>% 
   filter(complete.cases(.)) %>% 
   ggplot(aes(x = Embarked,
@@ -291,7 +277,7 @@ train %>%
   
 ```
 
-```{r}
+```{r, echo=FALSE}
 train %>% 
   filter(complete.cases(.)) %>%
   group_by(Embarked, Survived) %>%
@@ -311,7 +297,7 @@ train %>%
 It is apparent that the amount of survivors among the passengers embarking in Cherbourg is relatively higher than in Queenstown or Southhampton.
 From the correlation plot we know that this variable is correlated with passenger class.
 
-```{r}
+```{r, echo=FALSE}
 train %>% 
   filter(complete.cases(.)) %>%
   group_by(Embarked, Pclass) %>%
@@ -330,7 +316,7 @@ train %>%
 We see that among the passengers embarking in Cherbourg, the majority belonged to class 1, while the vast majority of people embarking in Queensland (with the lowest proportion of survivors) were 3rd class passengers.
 
 
-```{r}
+```{r, echo=FALSE}
 train %>% 
   filter(complete.cases(.)) %>%
   ggplot(aes(x = Parch, fill = Sex)) +
@@ -367,7 +353,7 @@ Most passengers were travelling without their children/parents. The absolute num
 
 
 
-Passenger class and fare are 
+Passenger class and fare are both equally strong correlated with 
 They are, however, strongly negatively correlated with each other, i.e. the highest fares are found in class 1.
 ```{r, echo=FALSE}
 ggplot(train, aes(x = Pclass,
