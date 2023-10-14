@@ -2,7 +2,9 @@ library(tidyverse)
 library(Hmisc)
 library(reshape2)
 library(ggpol)
-library(egg)
+library(wesanderson)
+library(viridis)
+# library(egg)
 library(corrplot) #correlation matrix and plots
 library(caret) #regression
 library(fastDummies)
@@ -52,15 +54,18 @@ train %>%
   sapply(., function(x) length(unique(x)))
 
 # Visualisation----
+
+pal_c <- wes_palette("GrandBudapest1", 21, type = "continuous")
+
 # Correlations between the variables
 correlation_matrix <- train %>%
   select(!c(Name, PassengerId, Ticket)) %>%
-  mutate(across(where(is.factor), as.numeric)) %>%
-  filter(if_any(.cols = everything, ))
+  mutate(across(where(is.factor), as.numeric),
+         across(where(is.character), as.integer)) %>%
+  filter(complete.cases()) %>% 
   cor(as.matrix(.), method = "spearman")
 
 corrplot(correlation_matrix, method = "number")
-
 # Fare per class
 ggplot(train, aes(x = Pclass,
                   y = Fare,
@@ -71,17 +76,91 @@ ggplot(train, aes(x = Pclass,
        x = "Class") +
   theme_minimal()
 
-# Survived/Sex
-ggplot(train, aes(x = Pclass,
-                  fill = Survived)) +
+# Age distribution/Class
+ggplot(train, aes(x = Sex,
+                  y = Age,
+                  fill = Sex)) +
+  geom_boxjitter(jitter.color = NA, 
+                 jitter.shape = 21) +
+  facet_wrap(Pclass ~ .) +
+  labs(title = "Age distribution based on sex and passenger class",
+       y = "Age",
+       x = "Passenger Class") +
+  theme_minimal()+
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())
+
+# Boxjitterplot for survivors/class/sex
+ggplot(train %>% filter(Survived == 1), aes(x = Sex,
+                  y = Age,
+                  fill = Sex)) +
+  geom_boxjitter(jitter.color = NA, 
+                 jitter.shape = 21) +
+  facet_wrap(Pclass ~ .) +
+  labs(title = "Age distribution based on sex and passenger class",
+       y = "Age",
+       x = "Passenger Class") +
+  theme_minimal()+
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())
+
+# Plot histograms
+a1 <- train %>% 
+  filter(Pclass == 1) %>% 
+  ggplot(aes(x=Age, fill = Survived))+
+  geom_histogram(color = "black")+
+  facet_grid(Survived~.)+
+  labs(title = "Class 1") +
+  theme_minimal()
+
+a2 <- train %>% 
+  filter(Pclass == 2) %>% 
+  ggplot(aes(x=Age, fill = Survived))+
+  geom_histogram(color = "black")+
+  facet_grid(Survived~.)+
+  labs(title = "Class 2") +
+  theme_minimal()
+
+a3 <- train %>% 
+  filter(Pclass == 3) %>% 
+  ggplot(train, aes(x=Age, fill = Survived))+
+  geom_histogram(color = "black")+
+  facet_grid(Survived~.)+
+  labs(title = "Class 3") +
+  theme_minimal()
+
+grid.arrange(a1, a2, a3)
+grid.arrange(grobs = list(a1, a2, a3),
+             widhts = c(1,1,1),
+             layout_matrix = c(1,2,3),
+             common.legend = TRUE, theme(legend.position = "bottom"))
+
+# Survived/Sex/Class
+train %>% 
+  group_by(Sex) %>% 
+  ggplot(aes(x = Pclass,
+             fill = Survived)) +
+    geom_bar(stat="count",
+             width = 0.4,
+             position = position_dodge(width = 0.6)) +
+    labs(title = "Survival based on Passenger Class",
+         y = "Count",
+         x = "Class",
+         fill = "Survived") +
+    theme_minimal()
+
+# Survived?Sex*Age
+ggplot(train, aes(x = interaction(Pclass, Sex),
+           fill = Survived)) +
   geom_bar(stat="count",
            width = 0.4,
            position = position_dodge(width = 0.6)) +
-  labs(title = "Survival based on Passenger Class",
+  labs(title = "Survival based on Passenger Class and Sex",
        y = "Count",
        x = "Class",
        fill = "Survived") +
   theme_minimal()
+
 
 #ParCh/Class 
 ggplot(train, aes(x = Parch,
@@ -94,6 +173,7 @@ ggplot(train, aes(x = Parch,
        x = "Parents/Children",
        fill = "Class") +
   theme_minimal()
+
 
 # ParCh/Survival/Sex
 ggplot(train, aes(x = Parch, 
@@ -112,6 +192,7 @@ ggplot(train, aes(x = Parch,
 
 # Survival dependent on fare/Pclass? - 
 train %>% 
+  filter(Survived == 1) %>% 
   ggplot(aes(x = Pclass, y = Age))+
   geom_boxjitter(aes(fill = Sex),
                  position = position_dodge(width = 0.8),

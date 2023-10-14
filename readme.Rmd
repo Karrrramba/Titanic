@@ -25,7 +25,7 @@ train <- read_csv("./Data/train.csv", col_types = "nffcfnnncnf")
 test <- read_csv("./Data/test.csv", col_types = "nffcfnnncnf")
 ```
 
-### Exploratory data analysis
+## Exploratory data analysis
 
 ```{r}
 str(train)
@@ -54,7 +54,7 @@ train %>%
   summarise_all(list(~sum(is.na(.))))
 ```
 We will deal with missing values later on. 
-We will replace blank cells and those containing only spaces, as well as zeros in Fare with NAs.
+For now, we replace blank cells and those containing only spaces, as well as 0s in Fare with NA.
 
 ```{r}
 train$Fare[train$Fare == 0] = NA
@@ -68,12 +68,6 @@ train <- train %>%
 ```{r}
 train %>% 
   summarise_all(list(~sum(is.na(.))))
-```
-
-Due to too many missing values, we will drop the Cabin column.
-
-```{r}
-train <- train %>% select(!Cabin)
 ```
 
 
@@ -99,29 +93,12 @@ train <- train %>%
          )
 ```
 
-Distributions of passenger IDs across passenger classes.
 
-```{r, echo=FALSE}
-train
-ggplot(train, aes(x = PassengerId,
-                  y = Pclass,
-                  fill = Pclass)) +
-  geom_jitter(shape = 21,
-             color = "white") +
-  labs(title = "Distirbution of passenger IDs",
-       y = "Class",
-       x = "Passenger ID",
-       fill = "Passenger class") +
-  theme_minimal()+
-  scale_fill_manual(values = wes_palette("GrandBudapest1"))
-```
-Since the passenger IDs are distributed uniformly across all classes we will remove it as it holds no predictive value.
-
-
-Let us also inspect the relationships between the variables. First, we will a plot a correlation map displaying linear relationship between the variables.
+First, we will a plot a correlation map to get an idea of the relationship between the variables.
+Note that the correlation coefficient is a measure of linear relationships.
 ```{r}
 correlation_matrix <- train %>%
-  select(!c(Name, PassengerId, Ticket)) %>%
+  select(!c(Name, Ticketc, Cabin)) %>%
   mutate(across(where(is.factor), as.numeric)) %>%
   filter(complete.cases(.)) %>% 
   cor(as.matrix(.), method = "spearman")
@@ -140,7 +117,9 @@ corrplot(correlation_matrix,
 Let us now take a closer look at those variables which are correlated with survival. As expected sex is a strong predictor of survival. Let us look at the numbers of survivors based on sex and passenger class.
 
 ```{r, echo=FALSE}
-ggplot(train, 
+train %>%
+  filter(complete.cases(.)) %>% 
+  ggplot(train, 
        aes(x = interaction(Pclass, Sex),
            fill = Survived)) +
   geom_bar(stat="count",
@@ -150,7 +129,7 @@ ggplot(train,
        y = "Count",
        x = "Class/Sex",
        fill = "Survived") +
-  theme_minimal()+
+  theme_minimal() +
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 We can infer that females - in general - are more likely to survive. Passenger class is also a good predictor as we see a large proportion of deceased female passengers in the 3rd class, although absolute numbers are roughly equal all three classes. For males the proportion of survivors is smaller irrespective of class. Male passengers in first class were much more likely to survive than in other classes. 
@@ -369,11 +348,30 @@ ggplot(train, aes(x = Pclass,
 We should therefore consider removing one or the other as autocorrelated variables are likely to skew our predictive model.
 
 
-```{r}
+```{r, echo=FALSE}
 train %>% 
-  group_by(Survived) %>% 
-  summarise(across(c(Pclass, Sex, SibSp, Parch, Embarked), ~n()))
-  
+  filter(complete.cases(.)) %>% 
+  ggplot(aes(x = PassengerId,
+             y = Pclass,
+             fill = Pclass)) +
+  geom_jitter(shape = 21,
+             color = "white") +
+  labs(title = "Distirbution of passenger IDs",
+       y = "Class",
+       x = "Passenger ID",
+       fill = "Passenger class") +
+  theme_minimal()+
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
+Since the passenger IDs are distributed uniformly across all classes we will remove it as it holds no predictive value.
+  
+### Handling missing values
 
 
+We will drop the following columns: 
+PassengerId - no predictive value
+Cabin - too many missing values
+
+```{r}
+train <- train %>% 
+  select(!Cabin)
