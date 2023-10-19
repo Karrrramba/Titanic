@@ -104,24 +104,25 @@ We also want to check for missing values.
 ``` r
 train %>% 
   summarise_all(list(~sum(is.na(.)))) %>% 
-  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing")
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing") %>% 
+  arrange(desc(Missing)) %>% 
+  kable("simple")
 ```
 
-    ## # A tibble: 12 × 2
-    ##    Variable    Missing
-    ##    <chr>         <int>
-    ##  1 PassengerId       0
-    ##  2 Survived          0
-    ##  3 Pclass            0
-    ##  4 Name              0
-    ##  5 Sex               0
-    ##  6 Age             177
-    ##  7 SibSp             0
-    ##  8 Parch             0
-    ##  9 Ticket            0
-    ## 10 Fare             15
-    ## 11 Cabin           687
-    ## 12 Embarked          2
+| Variable    | Missing |
+|:------------|--------:|
+| Cabin       |     687 |
+| Age         |     177 |
+| Fare        |      15 |
+| Embarked    |       2 |
+| PassengerId |       0 |
+| Survived    |       0 |
+| Pclass      |       0 |
+| Name        |       0 |
+| Sex         |       0 |
+| SibSp       |       0 |
+| Parch       |       0 |
+| Ticket      |       0 |
 
 We will impute missing values later on. For now, we want to proceed with
 data visualization.
@@ -145,8 +146,8 @@ categorical_vars <- train %>%
 
 ![](readme_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
-Quick glance at the total numbers of passengers in each of the levels of
-SibSp and Parch.
+Quick glance at the total numbers of passengers travelling with their
+families.
 
 | SibSp | Count |
 |------:|------:|
@@ -158,18 +159,15 @@ SibSp and Parch.
 |     5 |     5 |
 |     8 |     7 |
 
-Numbers of passengers on board with their family
-
-    ## # A tibble: 7 × 2
-    ##   Parch Count
-    ##   <int> <int>
-    ## 1     0   678
-    ## 2     1   118
-    ## 3     2    80
-    ## 4     3     5
-    ## 5     4     4
-    ## 6     5     5
-    ## 7     6     1
+| Parch | Count |
+|------:|------:|
+|     0 |   678 |
+|     1 |   118 |
+|     2 |    80 |
+|     3 |     5 |
+|     4 |     4 |
+|     5 |     5 |
+|     6 |     1 |
 
 #### Categorical variables
 
@@ -178,14 +176,17 @@ Numbers of passengers on board with their family
 First, we will plot a correlation map to get an idea of the
 relationships between the variables.
 
-![](readme_files/figure-gfm/unnamed-chunk-17-1.png)<!-- --> PassengerID
-shows no correlations with any other variable. It is evenly distributed
-across passenger class and sex - the two strongest correlations with the
-target variable.
+![](readme_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+
+PassengerID shows no correlations with any other variable. It is evenly
+distributed across passenger class and sex - the two strongest
+correlations with the target variable.
+
 ![](readme_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- --> We will
-remove it as it holds no predictive value.
+![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+
+We will remove it as it holds no predictive value.
 
 ``` r
 train %>%
@@ -284,8 +285,6 @@ belonged to class 1, while the vast majority of passengers embarking in
 Queensland (with the lowest proportion of survivors) belonged to the 3rd
 class.
 
-Fare SibSp
-
 ``` r
 train %>% 
   pivot_longer(cols = Parch, names_to = "Variable", values_to = "Count") %>% 
@@ -311,7 +310,7 @@ train %>%
   summarise(Mean_age = round(mean(Age), 1),
             Median_age = median(Age),
             .groups = "drop") %>% 
-  kable("simple", caption = "Meand and median age across levels of parents/children and survival status")
+  kable("simple", caption = "Mean and median age across levels of parents/children and survival status")
 ```
 
 | Parch | Survived | Mean_age | Median_age |
@@ -329,19 +328,83 @@ train %>%
 |     5 | survived |       38 |         38 |
 |     6 | deceased |       43 |         43 |
 
-Meand and median age across levels of parents/children and survival
+Mean and median age across levels of parents/children and survival
 status
-
-Passenger class and fare are both equally strong correlated with They
-are, however, strongly negatively correlated with each other, i.e. the
-highest fares are found in class 1.
 
 ![](readme_files/figure-gfm/unnamed-chunk-29-1.png)<!-- -->
 
-\`\`\` Since the passenger IDs are distributed uniformly across all
-classes we will remove it as it holds no predictive value.
+### Imputation of missing values
 
-### Handling missing values
+Let’s take a quick look at the variables with missing values. But first
+we will remove the Cabin and PassengerId columns.
+
+``` r
+train <- train %>% select(!c(Cabin, PassengerId))
+```
+
+``` r
+train %>% 
+  summarise_all(list(~sum(is.na(.)))) %>% 
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing") %>% 
+  arrange(desc(Missing)) %>%
+  filter(Missing > 0) %>% 
+  kable("simple")
+```
+
+| Variable | Missing |
+|:---------|--------:|
+| Age      |     177 |
+| Fare     |      15 |
+| Embarked |       2 |
+
+For Embarked we will impute the mode. Since there is no mode function in
+base R, we will create our own.
+
+``` r
+variable_mode <- function(df, var, na.rm = FALSE){
+  var_mode <- names(which.max(table(df[[var]])))
+  return(var_mode)
+}
+```
+
+We can compare the missing values before and after imputation.
+
+``` r
+train %>% 
+  count(Embarked) %>% 
+  kable("simple")
+```
+
+| Embarked |   n |
+|:---------|----:|
+| C        | 168 |
+| Q        |  77 |
+| S        | 644 |
+| NA       |   2 |
+
+``` r
+train %>% 
+  mutate(Embarked = case_when(
+    is.na(Embarked) ~ variable_mode(train, "Embarked"),
+    TRUE ~ as.character(Embarked)
+  )) %>% 
+  count(Embarked, ) %>% 
+  kable("simple")
+```
+
+| Embarked |   n |
+|:---------|----:|
+| C        | 168 |
+| Q        |  77 |
+| S        | 646 |
+
+### EDA summary
+
+Quick review of the actions we have taken: - Remove columns Cabin and
+PassengerId - Impute missing values in - Embarked: mode - Age: mean of
+class + sex + family (SibSp/Parch) - Fare: mean of passenger class +
+age + family (SibSp/Parch) - Remove highly correlated variables (Fare
+and Passenger class)
 
 We will drop the following columns: PassengerId - no predictive value
 Cabin - too many missing values
