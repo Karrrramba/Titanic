@@ -286,19 +286,6 @@ Queensland (with the lowest proportion of survivors) belonged to the 3rd
 class.
 
 ``` r
-train %>% 
-  pivot_longer(cols = Parch, names_to = "Variable", values_to = "Count") %>% 
-  group_by(Variable, Count) %>% 
-  summarise(n = n(), .groups = "drop") %>% 
-  pivot_wider(names_from = c(Variable, Count), names_glue = "{Variable}_{Count}", values_from = "n")
-```
-
-    ## # A tibble: 1 × 7
-    ##   Parch_0 Parch_1 Parch_2 Parch_3 Parch_4 Parch_5 Parch_6
-    ##     <int>   <int>   <int>   <int>   <int>   <int>   <int>
-    ## 1     678     118      80       5       4       5       1
-
-``` r
 options(tibble.print_max = 12, tibble.print_min = 4)
 
 train %>% 
@@ -331,19 +318,17 @@ train %>%
 Mean and median age across levels of parents/children and survival
 status
 
-![](readme_files/figure-gfm/unnamed-chunk-29-1.png)<!-- -->
-
 ### Imputation of missing values
 
 Let’s take a quick look at the variables with missing values. But first
 we will remove the Cabin and PassengerId columns.
 
 ``` r
-train <- train %>% select(!c(Cabin, PassengerId))
+train_cln <- train %>% select(!c(Cabin, PassengerId, Ticket))
 ```
 
 ``` r
-train %>% 
+train_cln %>% 
   summarise_all(list(~sum(is.na(.)))) %>% 
   pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing") %>% 
   arrange(desc(Missing)) %>%
@@ -361,7 +346,7 @@ For Embarked we will impute the mode. Since there is no mode function in
 base R, we will create our own.
 
 ``` r
-variable_mode <- function(df, var, na.rm = FALSE){
+impute_mode <- function(df, var, na.rm = FALSE){
   var_mode <- names(which.max(table(df[[var]])))
   return(var_mode)
 }
@@ -370,7 +355,7 @@ variable_mode <- function(df, var, na.rm = FALSE){
 We can compare the missing values before and after imputation.
 
 ``` r
-train %>% 
+train_cln %>% 
   count(Embarked) %>% 
   kable("simple")
 ```
@@ -383,12 +368,12 @@ train %>%
 | NA       |   2 |
 
 ``` r
-train %>% 
+train_cln %>% 
   mutate(Embarked = case_when(
-    is.na(Embarked) ~ variable_mode(train, "Embarked"),
+    is.na(Embarked) ~ impute_mode(train_cln, "Embarked"),
     TRUE ~ as.character(Embarked)
   )) %>% 
-  count(Embarked, ) %>% 
+  count(Embarked) %>% 
   kable("simple")
 ```
 
@@ -398,13 +383,90 @@ train %>%
 | Q        |  77 |
 | S        | 646 |
 
+``` r
+train_imputed <- train_cln %>% 
+  mutate(Embarked = case_when(
+    is.na(Embarked) ~ impute_mode(train_cln, "Embarked"),
+    TRUE ~ as.character(Embarked)
+  ))
+```
+
+For the imputation of fare we can look again at the correlation matrix.
+Passenger class and fare show the greatest correlation across all
+variables, followed by Parch/SibSp.
+![](readme_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+
+``` r
+train %>% 
+  filter(!is.na(Fare)) %>% 
+  ggplot(aes(x = factor(SibSp),
+             y = Fare,
+             fill = factor(SibSp))) +
+  geom_boxplot() +
+  labs(title = "Fares for passengers travelling with family",
+       y = "Fare",
+       x = "Siblings/Spouse") +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1", 8, type = "continuous"))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+
+``` r
+train %>% 
+  group_by(SibSp) %>% 
+  filter(!is.na(Fare)) %>% 
+  summarise(Fare_mean = mean(Fare),
+            Fare_median = median(Fare)) %>% 
+  kable("simple")
+```
+
+| SibSp | Fare_mean | Fare_median |
+|------:|----------:|------------:|
+|     0 |        26 |           9 |
+|     1 |        44 |          26 |
+|     2 |        51 |          24 |
+|     3 |        68 |          25 |
+|     4 |        31 |          31 |
+|     5 |        46 |          46 |
+|     8 |        69 |          69 |
+
+``` r
+train_imputed %>% 
+  filter(!is.na(Fare)) %>% 
+  group_by(Pclass) %>% 
+  summarise(Mean_fare = mean(Fare),
+            Median_fare = median(Fare))
+```
+
+    ## # A tibble: 3 × 3
+    ##   Pclass Mean_fare Median_fare
+    ##   <fct>      <dbl>       <dbl>
+    ## 1 1           85.7          61
+    ## 2 2           21.1          15
+    ## 3 3           13.3           8
+
+``` r
+train_imputed %>% 
+  filter(is.na(Fare))
+```
+
+    ## # A tibble: 15 × 9
+    ##   Survived Pclass Name                    Sex     Age SibSp Parch  Fare Embarked
+    ##   <fct>    <fct>  <chr>                   <fct> <int> <int> <int> <int> <chr>   
+    ## 1 0        3      "Leonard, Mr. Lionel"   male     36     0     0    NA S       
+    ## 2 0        1      "Harrison, Mr. William" male     40     0     0    NA S       
+    ## 3 1        3      "Tornquist, Mr. Willia… male     25     0     0    NA S       
+    ## 4 0        2      "Parkes, Mr. Francis \… male     NA     0     0    NA S       
+    ## # ℹ 11 more rows
+
 ### EDA summary
 
-Quick review of the actions we have taken: - Remove columns Cabin and
-PassengerId - Impute missing values in - Embarked: mode - Age: mean of
-class + sex + family (SibSp/Parch) - Fare: mean of passenger class +
-age + family (SibSp/Parch) - Remove highly correlated variables (Fare
-and Passenger class)
+Quick review of the actions we have taken: - Remove columns Cabin,
+Ticket and PassengerId - Impute missing values in - Embarked: mode -
+Age: mean of class + sex + family (SibSp/Parch) - Fare: mean of
+passenger class + age + family (SibSp/Parch) - Remove highly correlated
+variables (Fare and Passenger class)
 
 We will drop the following columns: PassengerId - no predictive value
 Cabin - too many missing values
