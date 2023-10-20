@@ -184,62 +184,10 @@ correlations with the target variable.
 
 ![](readme_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
-
-We will remove it as it holds no predictive value.
-
-``` r
-train %>%
-  group_by(Survived, Sex) %>% 
-  summarise(n = n(), .groups = "drop") %>% 
-  mutate(percentage = round(n*100/sum(n), 2),
-         label = paste0(percentage,"%"),
-         Survived = case_match(Survived,
-                               "0" ~ "deceased",
-                               "1" ~ "survived")) %>% 
-  ggplot(aes(x = Sex,
-             y = n,
-             fill = Sex,
-             label = label)) +
-  geom_col() +
-  facet_grid(~Survived) +
-  labs(title = "Survival ratios for each sex",
-       y = "Passenger count",
-       x = "Sex",
-       fill = "Sex") +
-  theme_minimal()+
-  scale_fill_manual(values = wes_palette("GrandBudapest1")) +
-  theme(legend.position = "none")
-```
+![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- --> We will
+remove it as it holds no predictive value.
 
 ![](readme_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
-
-``` r
-train %>% 
-  group_by(Pclass, Survived) %>% 
-  summarise(n = n(), .groupes = "drop") %>% 
-  mutate(percentage = round(n*100/sum(n), 2), 
-         label = paste0(percentage,"%"),
-         Survived = case_match(Survived,
-                              "0" ~ "deceased",
-                              "1" ~ "survived")) %>% 
-  ggplot(aes(x = Pclass,
-             y = n,
-             fill = Survived,
-             label = label)) +
-    geom_col() +
-    labs(title = "Survival across classes",
-         y = "Passenger count",
-         x = "Passenger class",
-         fill = "Survival status") +
-  geom_label(position = position_stack(0.5),
-             show.legend = FALSE) +
-  theme_minimal() +
-  scale_fill_manual(values = wes_palette("GrandBudapest1"))
-```
-
-    ## `summarise()` has grouped output by 'Pclass'. You can override using the
-    ## `.groups` argument.
 
 ![](readme_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
@@ -285,21 +233,6 @@ belonged to class 1, while the vast majority of passengers embarking in
 Queensland (with the lowest proportion of survivors) belonged to the 3rd
 class.
 
-``` r
-options(tibble.print_max = 12, tibble.print_min = 4)
-
-train %>% 
-  mutate(Survived = case_match(Survived,
-                              "0" ~ "deceased",
-                              "1" ~ "survived")) %>% 
-  group_by(Parch, Survived) %>% 
-  filter(!is.na(Age)) %>% 
-  summarise(Mean_age = round(mean(Age), 1),
-            Median_age = median(Age),
-            .groups = "drop") %>% 
-  kable("simple", caption = "Mean and median age across levels of parents/children and survival status")
-```
-
 | Parch | Survived | Mean_age | Median_age |
 |------:|:---------|---------:|-----------:|
 |     0 | deceased |       32 |         29 |
@@ -325,15 +258,6 @@ we will remove the Cabin and PassengerId columns.
 
 ``` r
 train_cln <- train %>% select(!c(Cabin, PassengerId, Ticket))
-```
-
-``` r
-train_cln %>% 
-  summarise_all(list(~sum(is.na(.)))) %>% 
-  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing") %>% 
-  arrange(desc(Missing)) %>%
-  filter(Missing > 0) %>% 
-  kable("simple")
 ```
 
 | Variable | Missing |
@@ -395,31 +319,7 @@ For the imputation of fare we can look again at the correlation matrix.
 Passenger class and fare show the greatest correlation across all
 variables, followed by Parch/SibSp.
 ![](readme_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
-
-``` r
-train %>% 
-  filter(!is.na(Fare)) %>% 
-  ggplot(aes(x = factor(SibSp),
-             y = Fare,
-             fill = factor(SibSp))) +
-  geom_boxplot() +
-  labs(title = "Fares for passengers travelling with family",
-       y = "Fare",
-       x = "Siblings/Spouse") +
-  theme_minimal() +
-  scale_fill_manual(values = wes_palette("GrandBudapest1", 8, type = "continuous"))
-```
-
 ![](readme_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
-
-``` r
-train %>% 
-  group_by(SibSp) %>% 
-  filter(!is.na(Fare)) %>% 
-  summarise(Fare_mean = mean(Fare),
-            Fare_median = median(Fare)) %>% 
-  kable("simple")
-```
 
 | SibSp | Fare_mean | Fare_median |
 |------:|----------:|------------:|
