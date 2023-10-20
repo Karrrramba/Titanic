@@ -233,23 +233,70 @@ belonged to class 1, while the vast majority of passengers embarking in
 Queensland (with the lowest proportion of survivors) belonged to the 3rd
 class.
 
-| Parch | Survived | Mean_age | Median_age |
-|------:|:---------|---------:|-----------:|
-|     0 | deceased |       32 |         29 |
-|     0 | survived |       32 |         30 |
-|     1 | deceased |       27 |         26 |
-|     1 | survived |       23 |         22 |
-|     2 | deceased |       17 |         11 |
-|     2 | survived |       17 |         18 |
-|     3 | deceased |       32 |         32 |
-|     3 | survived |       34 |         24 |
-|     4 | deceased |       44 |         42 |
-|     5 | deceased |       40 |         39 |
-|     5 | survived |       38 |         38 |
-|     6 | deceased |       43 |         43 |
+The ticket column contains numeric and mixed entries. We will
+investigate whether there are any differences in the ticket types,
+i.e. numeric vs. non-numeric, between different starting integers,
+different strings of the non-numeric, etc. First we will separate
+numeric and non-numeric types and group the ticket types based on
+strings and first integers.
 
-Mean and median age across levels of parents/children and survival
-status
+``` r
+train <- train %>%
+  # transform values to numeric. if not possible, it will default to NA
+  mutate(Numeric_ticket = !is.na(as.numeric(Ticket)),
+         # create categorical values based on evaluation of numeric_ticket.
+         Ticket_group = case_when(
+           #  extract string if non-numeric
+         Numeric_ticket == FALSE~ str_extract(Ticket, "^[^\\s]+"),
+         # extract first integer if numeric
+         Numeric_ticket == TRUE ~ str_extract(Ticket, "^\\d")
+         ),
+         Ticket_group = gsub("\\.", "", Ticket_group)
+         )
+```
+
+``` r
+train %>% 
+  count(Survived, Numeric_ticket, name = "Count") %>% 
+  group_by(Numeric_ticket) %>% 
+  mutate(Percentage = round(Count*100/sum(Count))) %>% 
+  arrange(Numeric_ticket)
+```
+
+    ## # A tibble: 4 × 4
+    ## # Groups:   Numeric_ticket [2]
+    ##   Survived Numeric_ticket Count Percentage
+    ##   <fct>    <lgl>          <int>      <dbl>
+    ## 1 0        FALSE            142         62
+    ## 2 1        FALSE             88         38
+    ## 3 0        TRUE             407         62
+    ## 4 1        TRUE             254         38
+
+There is no difference in survival rate between numerical and
+non-numerical tickets.
+
+We have also divided each class further.
+
+``` r
+train %>% 
+  
+  distinct(Ticket_group)
+```
+
+    ## # A tibble: 43 × 1
+    ##    Ticket_group
+    ##    <chr>       
+    ##  1 A/5         
+    ##  2 PC          
+    ##  3 STON/O2     
+    ##  4 1           
+    ##  5 3           
+    ##  6 2           
+    ##  7 PP          
+    ##  8 CA          
+    ##  9 7           
+    ## 10 SC/Paris    
+    ## # ℹ 33 more rows
 
 ### Imputation of missing values
 
@@ -257,7 +304,7 @@ Let’s take a quick look at the variables with missing values. But first
 we will remove the Cabin and PassengerId columns.
 
 ``` r
-train_cln <- train %>% select(!c(Cabin, PassengerId, Ticket))
+train_cln <- train %>% select(!c(Cabin, PassengerId))
 ```
 
 | Variable | Missing |
@@ -280,16 +327,16 @@ We can compare the missing values before and after imputation.
 
 ``` r
 train_cln %>% 
-  count(Embarked) %>% 
+  count(Embarked, name = "Count") %>% 
   kable("simple")
 ```
 
-| Embarked |   n |
-|:---------|----:|
-| C        | 168 |
-| Q        |  77 |
-| S        | 644 |
-| NA       |   2 |
+| Embarked | Count |
+|:---------|------:|
+| C        |   168 |
+| Q        |    77 |
+| S        |   644 |
+| NA       |     2 |
 
 ``` r
 train_cln %>% 
@@ -297,15 +344,15 @@ train_cln %>%
     is.na(Embarked) ~ impute_mode(train_cln, "Embarked"),
     TRUE ~ as.character(Embarked)
   )) %>% 
-  count(Embarked) %>% 
+  count(Embarked, name = "Count") %>% 
   kable("simple")
 ```
 
-| Embarked |   n |
-|:---------|----:|
-| C        | 168 |
-| Q        |  77 |
-| S        | 646 |
+| Embarked | Count |
+|:---------|------:|
+| C        |   168 |
+| Q        |    77 |
+| S        |   646 |
 
 ``` r
 train_imputed <- train_cln %>% 
@@ -318,43 +365,62 @@ train_imputed <- train_cln %>%
 For the imputation of fare we can look again at the correlation matrix.
 Passenger class and fare show the greatest correlation across all
 variables, followed by Parch/SibSp.
-![](readme_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
-![](readme_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
-| SibSp | Fare_mean | Fare_median |
-|------:|----------:|------------:|
-|     0 |        26 |           9 |
-|     1 |        44 |          26 |
-|     2 |        51 |          24 |
-|     3 |        68 |          25 |
-|     4 |        31 |          31 |
-|     5 |        46 |          46 |
-|     8 |        69 |          69 |
+![](readme_files/figure-gfm/unnamed-chunk-38-1.png)<!-- --> Let us look
+at these variables for the missing Fare values.
+
+``` r
+train %>% 
+  select(Fare, Pclass, SibSp, Parch) %>% 
+  filter(is.na(Fare)) %>% 
+  kable("simple")
+```
+
+|    Fare | Pclass    |   SibSp |                                                Parch |
+|--------:|:----------|--------:|-----------------------------------------------------:|
+|      NA | 3         |       0 |                                                    0 |
+|      NA | 1         |       0 |                                                    0 |
+|      NA | 3         |       0 |                                                    0 |
+|      NA | 2         |       0 |                                                    0 |
+|      NA | 3         |       0 |                                                    0 |
+|      NA | 2         |       0 |                                                    0 |
+|      NA | 2         |       0 |                                                    0 |
+|      NA | 2         |       0 |                                                    0 |
+|      NA | 3         |       0 |                                                    0 |
+|      NA | 1         |       0 |                                                    0 |
+|      NA | 2         |       0 |                                                    0 |
+|      NA | 2         |       0 |                                                    0 |
+|      NA | 1         |       0 |                                                    0 |
+|      NA | 1         |       0 |                                                    0 |
+|      NA | 1         |       0 |                                                    0 |
+| Since b | oth SibSp | and Par | ch = 0, we will impute based on the passenger class. |
 
 ``` r
 train_imputed %>% 
   filter(!is.na(Fare)) %>% 
   group_by(Pclass) %>% 
-  summarise(Mean_fare = mean(Fare),
+  summarise(Count = n(),
+            Mean_fare = round(mean(Fare), 1), 
             Median_fare = median(Fare)) %>% 
   kable("simple")
 ```
 
-| Pclass | Mean_fare | Median_fare |
-|:-------|----------:|------------:|
-| 1      |        86 |          61 |
-| 2      |        21 |          15 |
-| 3      |        13 |           8 |
+| Pclass | Count | Mean_fare | Median_fare |
+|:-------|------:|----------:|------------:|
+| 1      |   211 |        86 |          61 |
+| 2      |   178 |        21 |          15 |
+| 3      |   487 |        13 |           8 |
+
+From the differences between mean and median as well as the box plot
+above we
 
 ### EDA summary
 
 Quick review of the actions we have taken: - Remove columns Cabin,
 Ticket and PassengerId - Impute missing values in - Embarked: mode -
 Age: mean of class + sex + family (SibSp/Parch) - Fare: mean of
-passenger class + age + family (SibSp/Parch) - Remove highly correlated
-variables (Fare and Passenger class)
-
-We will drop the following columns: PassengerId - no predictive value
-Cabin - too many missing values
+passenger class + family (SibSp) - Remove highly correlated variables
+(Fare and Passenger class)
 
 \`\`\`{r} train \<- train %\>% select(!Cabin)
