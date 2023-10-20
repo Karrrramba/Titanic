@@ -336,29 +336,15 @@ train_imputed %>%
   filter(!is.na(Fare)) %>% 
   group_by(Pclass) %>% 
   summarise(Mean_fare = mean(Fare),
-            Median_fare = median(Fare))
+            Median_fare = median(Fare)) %>% 
+  kable("simple")
 ```
 
-    ## # A tibble: 3 × 3
-    ##   Pclass Mean_fare Median_fare
-    ##   <fct>      <dbl>       <dbl>
-    ## 1 1           85.7          61
-    ## 2 2           21.1          15
-    ## 3 3           13.3           8
-
-``` r
-train_imputed %>% 
-  filter(is.na(Fare))
-```
-
-    ## # A tibble: 15 × 9
-    ##   Survived Pclass Name                    Sex     Age SibSp Parch  Fare Embarked
-    ##   <fct>    <fct>  <chr>                   <fct> <int> <int> <int> <int> <chr>   
-    ## 1 0        3      "Leonard, Mr. Lionel"   male     36     0     0    NA S       
-    ## 2 0        1      "Harrison, Mr. William" male     40     0     0    NA S       
-    ## 3 1        3      "Tornquist, Mr. Willia… male     25     0     0    NA S       
-    ## 4 0        2      "Parkes, Mr. Francis \… male     NA     0     0    NA S       
-    ## # ℹ 11 more rows
+| Pclass | Mean_fare | Median_fare |
+|:-------|----------:|------------:|
+| 1      |        86 |          61 |
+| 2      |        21 |          15 |
+| 3      |        13 |           8 |
 
 ### EDA summary
 
