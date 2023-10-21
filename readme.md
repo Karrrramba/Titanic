@@ -593,45 +593,15 @@ extract_titles <- function(df, na.rm = FALSE){
 train_with_titles <- extract_titles(train_imputed)
 ```
 
-There are four “main” title categories: Mr, Miss, Mrs and Master. We
-will merge “Lady”/“Countess”/“Ms” with “Mrs”, “Mme” with “Miss”, and all
-other titles with “Mr”.
-
-``` r
-# Create a helper selector "not in"
-`%nin%` <- purrr::negate(`%in%`)
-
-train_with_titles %>% 
-  mutate(
-    # Aggregate female titles first
-    Title = case_when(
-      Title %in% c("Lady", "theCountess", "Ms") ~ "Mrs",
-      Title == "Mme" ~ "Miss",
-      TRUE ~ Title
-      ),
-    # Aggregate everything else
-    Title = case_when(
-      Title %nin% c("Mr", "Miss", "Mrs", "Master") ~ "Mr",
-      TRUE ~ Title
-      )
-    )%>% 
-  group_by(Title) %>% 
-  count(Title, name = "Count", sort = TRUE) %>% 
-  kable("simple")
-```
-
-| Title  | Count |
-|:-------|------:|
-| Mr     |   540 |
-| Miss   |   183 |
-| Mrs    |   128 |
-| Master |    40 |
-
-We will create another function called “aggregate titles”.
+We want to have enough data in each group to perform robust imputation.
+Therefore will will merge all titles into four groups: Mr, Miss, Mrs and
+Master. We will merge “Lady”/“Countess”/“Ms” with “Mrs”, “Mme” with
+“Miss”, and all other titles with “Mr”. Create another function called
+“aggregate titles”.
 
 ``` r
 aggregate_titles <- function(df, na.rm = FALSE){
-  
+  # create a negative selector helper function
   `%nin%` <- purrr::negate(`%in%`)
   
   df <- df %>% 
@@ -653,12 +623,32 @@ aggregate_titles <- function(df, na.rm = FALSE){
 }
 ```
 
-### EDA summary
+``` r
+train_with_titles <- aggregate_titles(train_with_titles)
 
-Quick review of the actions we have taken: - Remove columns Cabin,
-Ticket and PassengerId - Impute missing values in - Embarked: mode -
-Age: mean of class + sex + family (SibSp/Parch) - Fare: mean of
-passenger class + family (SibSp) - Remove highly correlated variables
-(Fare and Passenger class)
+train_with_titles %>% 
+  group_by(Title) %>% 
+  count(Title, name = "Count", sort = TRUE) %>% 
+  kable("simple")
+```
 
-\`\`\`{r} train \<- train %\>% select(!Cabin)
+| Title  | Count |
+|:-------|------:|
+| Mr     |   540 |
+| Miss   |   183 |
+| Mrs    |   128 |
+| Master |    40 |
+
+| Title  |   n | mean | median |   sd |
+|:-------|----:|-----:|-------:|-----:|
+| Master |  40 |  4.5 |    3.5 |  3.7 |
+| Miss   | 183 | 21.8 |   21.0 | 13.0 |
+| Mr     | 540 | 33.0 |   30.0 | 13.0 |
+| Mrs    | 128 | 35.9 |   35.0 | 11.4 |
+
+![](readme_files/figure-gfm/unnamed-chunk-50-1.png)<!-- -->
+
+![](readme_files/figure-gfm/unnamed-chunk-51-1.png)<!-- -->
+
+<!-- ### EDA summary -->
+<!-- Quick review of the actions we have taken: - Remove columns Cabin, Ticket and PassengerId - Impute missing values in - Embarked: mode - Age: mean of class + sex + family (SibSp/Parch) - Fare: mean of passenger class + family (SibSp) - Remove highly correlated variables (Fare and Passenger class) -->
