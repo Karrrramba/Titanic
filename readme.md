@@ -103,26 +103,31 @@ We also want to check for missing values.
 
 ``` r
 train %>% 
-  summarise_all(list(~sum(is.na(.)))) %>% 
-  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing") %>% 
+  summarise_all(list( ~sum(is.na(.)))) %>% 
+  pivot_longer(cols = everything(), 
+               names_to = "Variable", 
+               values_to = "Missing") %>% 
   arrange(desc(Missing)) %>% 
+  mutate(n = 891,
+         Proportion_missing = paste0(round(Missing*100/n, 1), "%")) %>% 
+  select(!n) %>% 
   kable("simple")
 ```
 
-| Variable    | Missing |
-|:------------|--------:|
-| Cabin       |     687 |
-| Age         |     177 |
-| Fare        |      15 |
-| Embarked    |       2 |
-| PassengerId |       0 |
-| Survived    |       0 |
-| Pclass      |       0 |
-| Name        |       0 |
-| Sex         |       0 |
-| SibSp       |       0 |
-| Parch       |       0 |
-| Ticket      |       0 |
+| Variable    | Missing | Proportion_missing |
+|:------------|--------:|:-------------------|
+| Cabin       |     687 | 77.1%              |
+| Age         |     177 | 19.9%              |
+| Fare        |      15 | 1.7%               |
+| Embarked    |       2 | 0.2%               |
+| PassengerId |       0 | 0%                 |
+| Survived    |       0 | 0%                 |
+| Pclass      |       0 | 0%                 |
+| Name        |       0 | 0%                 |
+| Sex         |       0 | 0%                 |
+| SibSp       |       0 | 0%                 |
+| Parch       |       0 | 0%                 |
+| Ticket      |       0 | 0%                 |
 
 We will impute missing values later on. For now, we want to proceed with
 data visualization.
@@ -184,8 +189,9 @@ correlations with the target variable.
 
 ![](readme_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- --> We will
-remove it as it holds no predictive value.
+![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+
+We will remove it as it holds no predictive value.
 
 ![](readme_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
@@ -273,30 +279,91 @@ train %>%
     ## 4 1        TRUE             254         38
 
 There is no difference in survival rate between numerical and
-non-numerical tickets.
-
-We have also divided each class further.
+non-numerical tickets. We have also divided each class further.
 
 ``` r
+options(tibble.print_max = 44, tibble.print_min = 4)
+
 train %>% 
-  
-  distinct(Ticket_group)
+  count(Survived, Ticket_group, name = "Count") %>% 
+  group_by(Ticket_group) %>% 
+  mutate(Percentage = round(Count*100/sum(Count))) %>%
+  # sort groups based on highest number of survivors
+  arrange(desc(Count * (Survived == 1)), .by_group = TRUE) %>% 
+  kable("simple")
 ```
 
-    ## # A tibble: 43 × 1
-    ##    Ticket_group
-    ##    <chr>       
-    ##  1 A/5         
-    ##  2 PC          
-    ##  3 STON/O2     
-    ##  4 1           
-    ##  5 3           
-    ##  6 2           
-    ##  7 PP          
-    ##  8 CA          
-    ##  9 7           
-    ## 10 SC/Paris    
-    ## # ℹ 33 more rows
+| Survived | Ticket_group | Count | Percentage |
+|:---------|:-------------|------:|-----------:|
+| 1        | 1            |    92 |         63 |
+| 0        | 1            |    54 |         37 |
+| 1        | 2            |    85 |         46 |
+| 0        | 2            |    98 |         54 |
+| 1        | 3            |    72 |         24 |
+| 0        | 3            |   229 |         76 |
+| 1        | 4            |     2 |         20 |
+| 0        | 4            |     8 |         80 |
+| 0        | 5            |     3 |        100 |
+| 1        | 6            |     1 |         17 |
+| 0        | 6            |     5 |         83 |
+| 1        | 7            |     1 |         11 |
+| 0        | 7            |     8 |         89 |
+| 0        | 8            |     2 |        100 |
+| 1        | 9            |     1 |        100 |
+| 0        | A/4          |     6 |        100 |
+| 1        | A/5          |     2 |         11 |
+| 0        | A/5          |    17 |         89 |
+| 0        | A/S          |     1 |        100 |
+| 0        | A4           |     1 |        100 |
+| 0        | A5           |     2 |        100 |
+| 1        | C            |     2 |         40 |
+| 0        | C            |     3 |         60 |
+| 1        | CA           |    14 |         34 |
+| 0        | CA           |    27 |         66 |
+| 0        | CA/SOTON     |     1 |        100 |
+| 0        | FC           |     1 |        100 |
+| 1        | FCC          |     4 |         80 |
+| 0        | FCC          |     1 |         20 |
+| 0        | Fa           |     1 |        100 |
+| 1        | LINE         |     1 |         25 |
+| 0        | LINE         |     3 |         75 |
+| 1        | P/PP         |     1 |         50 |
+| 0        | P/PP         |     1 |         50 |
+| 1        | PC           |    39 |         65 |
+| 0        | PC           |    21 |         35 |
+| 1        | PP           |     2 |         67 |
+| 0        | PP           |     1 |         33 |
+| 1        | SC           |     1 |        100 |
+| 0        | SC/A4        |     1 |        100 |
+| 1        | SC/AH        |     2 |         67 |
+| 0        | SC/AH        |     1 |         33 |
+| 1        | SC/PARIS     |     3 |         43 |
+| 0        | SC/PARIS     |     4 |         57 |
+| 1        | SC/Paris     |     2 |         50 |
+| 0        | SC/Paris     |     2 |         50 |
+| 0        | SCO/W        |     1 |        100 |
+| 1        | SO/C         |     1 |        100 |
+| 0        | SO/PP        |     3 |        100 |
+| 0        | SOC          |     5 |        100 |
+| 0        | SOP          |     1 |        100 |
+| 0        | SOTON/O2     |     2 |        100 |
+| 1        | SOTON/OQ     |     2 |         13 |
+| 0        | SOTON/OQ     |    13 |         87 |
+| 0        | SP           |     1 |        100 |
+| 1        | STON/O       |     5 |         42 |
+| 0        | STON/O       |     7 |         58 |
+| 1        | STON/O2      |     3 |         50 |
+| 0        | STON/O2      |     3 |         50 |
+| 1        | SW/PP        |     2 |        100 |
+| 1        | W/C          |     1 |         10 |
+| 0        | W/C          |     9 |         90 |
+| 1        | WE/P         |     1 |         50 |
+| 0        | WE/P         |     1 |         50 |
+| 0        | WEP          |     1 |        100 |
+
+There are too many groups to infer any meaningful pattern. Some groups
+could probably be merged. SC/paris and SC/PARIS are an obvious choice
+but others might be the result of ambiguous annotation.
 
 ### Imputation of missing values
 
@@ -312,6 +379,8 @@ train_cln <- train %>% select(!c(Cabin, PassengerId))
 | Age      |     177 |
 | Fare     |      15 |
 | Embarked |       2 |
+
+#### Embarked
 
 For Embarked we will impute the mode. Since there is no mode function in
 base R, we will create our own.
@@ -362,58 +431,227 @@ train_imputed <- train_cln %>%
   ))
 ```
 
+#### Fare
+
 For the imputation of fare we can look again at the correlation matrix.
 Passenger class and fare show the greatest correlation across all
 variables, followed by Parch/SibSp.
-![](readme_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-38-1.png)<!-- --> Let us look
-at these variables for the missing Fare values.
-
-``` r
-train %>% 
-  select(Fare, Pclass, SibSp, Parch) %>% 
-  filter(is.na(Fare)) %>% 
-  kable("simple")
-```
-
-|    Fare | Pclass    |   SibSp |                                                Parch |
-|--------:|:----------|--------:|-----------------------------------------------------:|
-|      NA | 3         |       0 |                                                    0 |
-|      NA | 1         |       0 |                                                    0 |
-|      NA | 3         |       0 |                                                    0 |
-|      NA | 2         |       0 |                                                    0 |
-|      NA | 3         |       0 |                                                    0 |
-|      NA | 2         |       0 |                                                    0 |
-|      NA | 2         |       0 |                                                    0 |
-|      NA | 2         |       0 |                                                    0 |
-|      NA | 3         |       0 |                                                    0 |
-|      NA | 1         |       0 |                                                    0 |
-|      NA | 2         |       0 |                                                    0 |
-|      NA | 2         |       0 |                                                    0 |
-|      NA | 1         |       0 |                                                    0 |
-|      NA | 1         |       0 |                                                    0 |
-|      NA | 1         |       0 |                                                    0 |
-| Since b | oth SibSp | and Par | ch = 0, we will impute based on the passenger class. |
+![](readme_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 ``` r
 train_imputed %>% 
-  filter(!is.na(Fare)) %>% 
   group_by(Pclass) %>% 
   summarise(Count = n(),
-            Mean_fare = round(mean(Fare), 1), 
-            Median_fare = median(Fare)) %>% 
+            Mean_fare = round(mean(Fare, na.rm = TRUE), 1),
+            Median_fare = median(Fare, na.rm = TRUE)) %>% 
   kable("simple")
 ```
 
 | Pclass | Count | Mean_fare | Median_fare |
 |:-------|------:|----------:|------------:|
-| 1      |   211 |        86 |          61 |
-| 2      |   178 |        21 |          15 |
-| 3      |   487 |        13 |           8 |
+| 1      |   216 |        86 |          61 |
+| 2      |   184 |        21 |          15 |
+| 3      |   491 |        13 |           8 |
 
 From the differences between mean and median as well as the box plot
-above we
+above we see few, but significant outliers. Therefore we will use the
+median.
+
+![](readme_files/figure-gfm/unnamed-chunk-38-1.png)<!-- -->
+
+Let us look at these variables for the missing Fare values.
+
+``` r
+train_imputed %>% 
+  select(Fare, Pclass, SibSp, Parch) %>% 
+  filter(is.na(Fare)) %>% 
+  kable("simple")
+```
+
+| Fare | Pclass | SibSp | Parch |
+|-----:|:-------|------:|------:|
+|   NA | 3      |     0 |     0 |
+|   NA | 1      |     0 |     0 |
+|   NA | 3      |     0 |     0 |
+|   NA | 2      |     0 |     0 |
+|   NA | 3      |     0 |     0 |
+|   NA | 2      |     0 |     0 |
+|   NA | 2      |     0 |     0 |
+|   NA | 2      |     0 |     0 |
+|   NA | 3      |     0 |     0 |
+|   NA | 1      |     0 |     0 |
+|   NA | 2      |     0 |     0 |
+|   NA | 2      |     0 |     0 |
+|   NA | 1      |     0 |     0 |
+|   NA | 1      |     0 |     0 |
+|   NA | 1      |     0 |     0 |
+
+Since the only level for SibSp and Parch is 0, we will impute fare based
+on the passenger class.
+
+Again we will create a function for the imputation.
+
+``` r
+impute_fare <- function(df, na.rm = FALSE){
+  grouped_median_fares <- df %>% 
+    group_by(Pclass) %>% 
+    summarise(Fare_median = median(Fare, na.rm = TRUE))
+  
+  df <- df %>%
+    left_join(grouped_median_fares, by = "Pclass") %>% 
+    mutate(Fare = coalesce(Fare, Fare_median)) %>%
+    select(-Fare_median)
+    
+  return(df)
+}
+```
+
+Check missing values before and after imputation.
+
+| Pclass | Missing_fare_values |
+|:-------|--------------------:|
+| 1      |                   5 |
+| 2      |                   6 |
+| 3      |                   4 |
+
+``` r
+train_imputed <- impute_fare(train_imputed)
+```
+
+``` r
+train_imputed %>% 
+  group_by(Pclass) %>% 
+  summarise(Missing_fare_values = sum(is.na(Fare))) %>% 
+  kable("simple")
+```
+
+| Pclass | Missing_fare_values |
+|:-------|--------------------:|
+| 1      |                   0 |
+| 2      |                   0 |
+| 3      |                   0 |
+
+#### Age imputation
+
+For the imputation of age, we will extract the titles from inside the
+name column. Then we will create title groups and calculate the mean and
+standard deviation for each, from which we will sample and impute.
+
+``` r
+options(tibble.print_max = 17, tibble.print_min = 4)
+
+train_imputed %>% 
+    # Remove spaces
+    mutate(Name = gsub(" ", "", Name),
+           # Extract string following (including) comma
+         Title = str_extract(Name, ",([a-zA-Z]*)"),
+         # Remove comma
+         Title = gsub(",", "", Title)) %>% 
+  select(!Name) %>% 
+  group_by(Title) %>% 
+  count(Title, name = "Count", sort = TRUE) %>% 
+  kable("simple")
+```
+
+| Title       | Count |
+|:------------|------:|
+| Mr          |   517 |
+| Miss        |   182 |
+| Mrs         |   125 |
+| Master      |    40 |
+| Dr          |     7 |
+| Rev         |     6 |
+| Col         |     2 |
+| Major       |     2 |
+| Mlle        |     2 |
+| Capt        |     1 |
+| Don         |     1 |
+| Jonkheer    |     1 |
+| Lady        |     1 |
+| Mme         |     1 |
+| Ms          |     1 |
+| Sir         |     1 |
+| theCountess |     1 |
+
+We will create a small function for this operation.
+
+``` r
+extract_titles <- function(df, na.rm = FALSE){
+
+  df <- df %>% 
+      mutate(Name = gsub(" ", "", Name),
+             Title = str_extract(Name, ",([a-zA-Z]*)"),
+             Title = gsub(",", "", Title)) %>% 
+      select(!Name)
+  
+  return(df)
+}
+```
+
+``` r
+train_with_titles <- extract_titles(train_imputed)
+```
+
+There are four “main” title categories: Mr, Miss, Mrs and Master. We
+will merge “Lady”/“Countess”/“Ms” with “Mrs”, “Mme” with “Miss”, and all
+other titles with “Mr”.
+
+``` r
+# Create a helper selector "not in"
+`%nin%` <- purrr::negate(`%in%`)
+
+train_with_titles %>% 
+  mutate(
+    # Aggregate female titles first
+    Title = case_when(
+      Title %in% c("Lady", "theCountess", "Ms") ~ "Mrs",
+      Title == "Mme" ~ "Miss",
+      TRUE ~ Title
+      ),
+    # Aggregate everything else
+    Title = case_when(
+      Title %nin% c("Mr", "Miss", "Mrs", "Master") ~ "Mr",
+      TRUE ~ Title
+      )
+    )%>% 
+  group_by(Title) %>% 
+  count(Title, name = "Count", sort = TRUE) %>% 
+  kable("simple")
+```
+
+| Title  | Count |
+|:-------|------:|
+| Mr     |   540 |
+| Miss   |   183 |
+| Mrs    |   128 |
+| Master |    40 |
+
+We will create another function called “aggregate titles”.
+
+``` r
+aggregate_titles <- function(df, na.rm = FALSE){
+  
+  `%nin%` <- purrr::negate(`%in%`)
+  
+  df <- df %>% 
+      mutate(
+        # Aggregate female titles first
+        Title = case_when(
+          Title %in% c("Lady", "theCountess", "Ms") ~ "Mrs",
+          Title == "Mme" ~ "Miss",
+          TRUE ~ Title
+          ),
+        # Aggregate everything else
+        Title = case_when(
+          Title %nin% c("Mr", "Miss", "Mrs", "Master") ~ "Mr",
+          TRUE ~ Title
+          )
+        )
+  
+  return(df)
+}
+```
 
 ### EDA summary
 
