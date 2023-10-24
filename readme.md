@@ -648,7 +648,42 @@ train_with_titles %>%
 
 ![](readme_files/figure-gfm/unnamed-chunk-50-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-51-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-51-1.png)<!-- --> Since the
+title “Miss” is used for unmarried women, we will split the “miss” group
+based on whether they were traveling with Parents and/or children -
+assuming that those without are older.
+
+``` r
+train_with_titles %>% 
+  filter(!is.na(Age)) %>%  # & Title == "Miss") %>% 
+  mutate(Family = case_when(
+    Parch == 0 ~ "No",
+    TRUE ~ "Yes"
+  )) %>% 
+  ggplot(aes(x = Family,
+             y = Age)) +
+  geom_boxjitter(aes(fill = Family),
+                 position = position_dodge(width = 0.5),
+                 width = 0.4,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4) +
+  labs(title = "Age distribution of male passengers in each class",
+       y = "Age",
+       x = "Traveling with family") +
+  facet_grid(~Title) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank()) +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-52-1.png)<!-- --> Our
+assumption turns out to be true so we will consider it within our
+imputation function. The same assumption seems to be true for young men
+(“Master”) but with just one observation there is not enough data to
+support it.
 
 <!-- ### EDA summary -->
 <!-- Quick review of the actions we have taken: - Remove columns Cabin, Ticket and PassengerId - Impute missing values in - Embarked: mode - Age: mean of class + sex + family (SibSp/Parch) - Fare: mean of passenger class + family (SibSp) - Remove highly correlated variables (Fare and Passenger class) -->
