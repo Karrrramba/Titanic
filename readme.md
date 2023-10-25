@@ -759,14 +759,15 @@ train_with_titles %>%
   kable("simple")
 ```
 
-| Title     |    Count |    Mean |   SD |
-|:----------|---------:|--------:|-----:|
-| Master    |       36 |     4.5 |  3.7 |
-| Miss      |       92 |    27.7 | 11.0 |
-| Miss_fam  |       55 |    11.8 |  9.5 |
-| Mr        |      420 |    33.0 | 13.0 |
-| Mrs       |      111 |    35.9 | 11.4 |
-| … with th | e impute | d value |    s |
+| Title    | Count | Mean |   SD |
+|:---------|------:|-----:|-----:|
+| Master   |    36 |  4.5 |  3.7 |
+| Miss     |    92 | 27.7 | 11.0 |
+| Miss_fam |    55 | 11.8 |  9.5 |
+| Mr       |   420 | 33.0 | 13.0 |
+| Mrs      |   111 | 35.9 | 11.4 |
+
+with the imputed values
 
 ``` r
 impute_age(train_with_titles) %>% 
@@ -806,6 +807,17 @@ impute_age(train_with_titles) %>%
 
 ``` r
 train_complete <- impute_age(train_with_titles)
+```
+
+Package all imputation functions into one for easier application to a
+test data set.
+
+``` r
+impute_missing_values <- function (df, na.rm = FALSE){
+  
+  
+  
+}
 ```
 
 <!-- ### EDA summary -->
