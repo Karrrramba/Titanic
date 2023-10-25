@@ -679,28 +679,8 @@ train_with_titles %>%
   scale_fill_manual(values = wes_palette("GrandBudapest1"))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-52-1.png)<!-- -->
-
-``` r
-train_with_titles %>% 
-  filter(!is.na(Age)) %>%
-  mutate(Title = ifelse(Title == "Miss" & Parch > 0, "Miss_fam", Title)) %>% 
-  group_by(Title) %>% 
-    summarise(Count = n(),
-      Mean = round(mean(Age, na.rm = TRUE), 1),
-      SD   = round(sd(Age, na.rm = TRUE), 1))
-```
-
-    ## # A tibble: 5 × 4
-    ##   Title    Count  Mean    SD
-    ##   <chr>    <int> <dbl> <dbl>
-    ## 1 Master      36   4.5   3.7
-    ## 2 Miss        92  27.7  11  
-    ## 3 Miss_fam    55  11.8   9.5
-    ## 4 Mr         420  33    13  
-    ## 5 Mrs        111  35.9  11.4
-
-Our assumption turns out to be true so we will consider it within our
+![](readme_files/figure-gfm/unnamed-chunk-52-1.png)<!-- --> Our
+assumption turns out to be true so we will consider it within our
 imputation function. The same assumption seems to be true for young men
 (“Master”) but with just one observation there is not enough data to
 support it. Arguably one could also merge “Mr” and “Mrs” as their
@@ -718,7 +698,16 @@ impute_age <- function(df){
     summarise(Mean = round(mean(Age, na.rm = TRUE)),
               SD = round(sd(Age, na.rm = TRUE)))
   
-  print(group_mu_sd)
+  # helper function for sampling from a normal distribution but within one standard deviation from the mean
+  sample_rnorm_within_bounds <- function(mean, sd, lower = mean - sd, upper = mean + sd, max_attempts = 1000) {
+    for (i in 1:max_attempts) {
+      sample <- rnorm(1, mean, sd)
+      if (sample >= lower && sample <= upper) {
+        return(sample)
+      }
+    }
+    stop(paste("Failed to sample a value within bounds after", max_attempts, "attempts."))
+  }
   
   # impute age by random sampling from normal distribution
   df_age_imputed <- df %>%
@@ -737,103 +726,87 @@ impute_age <- function(df){
 }
 ```
 
-``` r
-train_with_titles %>% 
-  filter(Title == "Miss")
-```
+Again we will compare the number of missing values before
 
-    ## # A tibble: 183 × 12
-    ##   Survived Pclass Sex      Age SibSp Parch Ticket   Fare Embarked Numeric_ticket
-    ##   <fct>    <fct>  <fct>  <int> <int> <int> <chr>   <dbl> <chr>    <lgl>         
-    ## 1 1        3      female    26     0     0 STON/O…     7 S        FALSE         
-    ## 2 1        3      female     4     1     1 PP 9549    16 S        FALSE         
-    ## 3 1        1      female    58     0     0 113783     26 S        TRUE          
-    ## 4 0        3      female    14     0     0 350406      7 S        TRUE          
-    ## # ℹ 179 more rows
-    ## # ℹ 2 more variables: Ticket_group <chr>, Title <chr>
+| Title  | Missing |
+|:-------|--------:|
+| Master |       4 |
+| Miss   |      36 |
+| Mr     |     120 |
+| Mrs    |      17 |
 
-``` r
-impute_age(train_with_titles) %>% 
-  filter(Title == "Miss")
-```
+and after imputation
 
-    ## # A tibble: 5 × 3
-    ##   Title     Mean    SD
-    ##   <chr>    <dbl> <dbl>
-    ## 1 Master       4     4
-    ## 2 Miss        28    11
-    ## 3 Miss_fam    12     9
-    ## 4 Mr          33    13
-    ## 5 Mrs         36    11
+| Title    | Missing |
+|:---------|--------:|
+| Master   |       0 |
+| Miss     |       0 |
+| Miss_fam |       0 |
+| Mr       |       0 |
+| Mrs      |       0 |
 
-    ## # A tibble: 119 × 12
-    ## # Rowwise:  Title
-    ##   Survived Pclass Sex      Age SibSp Parch Ticket   Fare Embarked Numeric_ticket
-    ##   <fct>    <fct>  <fct>  <dbl> <int> <int> <chr>   <dbl> <chr>    <lgl>         
-    ## 1 1        3      female    26     0     0 STON/O…     7 S        FALSE         
-    ## 2 1        1      female    58     0     0 113783     26 S        TRUE          
-    ## 3 0        3      female    14     0     0 350406      7 S        TRUE          
-    ## 4 1        3      female    15     0     0 330923      8 Q        TRUE          
-    ## # ℹ 115 more rows
-    ## # ℹ 2 more variables: Ticket_group <chr>, Title <chr>
-
-Again we will compare the number of missing values before and after
-imputation.
+Let us compare the mean and standard deviation of the original age
+values
 
 ``` r
 train_with_titles %>% 
+  filter(!is.na(Age)) %>%
+  mutate(Title = ifelse(Title == "Miss" & Parch > 0, "Miss_fam", Title)) %>% 
   group_by(Title) %>% 
-  summarise(Missing = sum(is.na(Age)))
+    summarise(Count = n(),
+      Mean = round(mean(Age, na.rm = TRUE), 1),
+      SD   = round(sd(Age, na.rm = TRUE), 1)) %>% 
+  kable("simple")
 ```
 
-    ## # A tibble: 4 × 2
-    ##   Title  Missing
-    ##   <chr>    <int>
-    ## 1 Master       4
-    ## 2 Miss        36
-    ## 3 Mr         120
-    ## 4 Mrs         17
+| Title     |    Count |    Mean |   SD |
+|:----------|---------:|--------:|-----:|
+| Master    |       36 |     4.5 |  3.7 |
+| Miss      |       92 |    27.7 | 11.0 |
+| Miss_fam  |       55 |    11.8 |  9.5 |
+| Mr        |      420 |    33.0 | 13.0 |
+| Mrs       |      111 |    35.9 | 11.4 |
+| … with th | e impute | d value |    s |
 
 ``` r
 impute_age(train_with_titles) %>% 
   group_by(Title) %>% 
-  summarise(Missing = sum(is.na(Age)))
+    summarise(Count = n(),
+      Mean = round(mean(Age, na.rm = TRUE), 1),
+      SD   = round(sd(Age, na.rm = TRUE), 1)) %>% 
+  kable("simple")
 ```
 
-    ## # A tibble: 5 × 3
-    ##   Title     Mean    SD
-    ##   <chr>    <dbl> <dbl>
-    ## 1 Master       4     4
-    ## 2 Miss        28    11
-    ## 3 Miss_fam    12     9
-    ## 4 Mr          33    13
-    ## 5 Mrs         36    11
+| Title    | Count | Mean |   SD |
+|:---------|------:|-----:|-----:|
+| Master   |    40 |  4.2 |  3.8 |
+| Miss     |   119 | 28.1 | 11.2 |
+| Miss_fam |    64 | 11.2 |  9.4 |
+| Mr       |   540 | 32.7 | 12.8 |
+| Mrs      |   128 | 36.0 | 11.0 |
 
-    ## # A tibble: 5 × 2
-    ##   Title    Missing
-    ##   <chr>      <int>
-    ## 1 Master         0
-    ## 2 Miss           0
-    ## 3 Miss_fam       0
-    ## 4 Mr             0
-    ## 5 Mrs            0
+We can also compare the densities of Age before and after imputation.
 
 ``` r
 train_with_titles %>% 
-  count(Title, is.na(Age))
+  filter(!is.na(Age)) %>% 
+  ggplot() +
+  geom_density(aes(x = Age))
 ```
 
-    ## # A tibble: 8 × 3
-    ##   Title  `is.na(Age)`     n
-    ##   <chr>  <lgl>        <int>
-    ## 1 Master FALSE           36
-    ## 2 Master TRUE             4
-    ## 3 Miss   FALSE          147
-    ## 4 Miss   TRUE            36
-    ## 5 Mr     FALSE          420
-    ## 6 Mr     TRUE           120
-    ## 7 Mrs    FALSE          111
-    ## 8 Mrs    TRUE            17
+![](readme_files/figure-gfm/unnamed-chunk-58-1.png)<!-- -->
+
+``` r
+impute_age(train_with_titles) %>% 
+  ggplot() +
+  geom_density(aes(x = Age))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-59-1.png)<!-- -->
+
+``` r
+train_complete <- impute_age(train_with_titles)
+```
 
 <!-- ### EDA summary -->
 <!-- Quick review of the actions we have taken: - Remove columns Cabin, Ticket and PassengerId - Impute missing values in - Embarked: mode - Age: mean of class + sex + family (SibSp/Parch) - Fare: mean of passenger class + family (SibSp) - Remove highly correlated variables (Fare and Passenger class) -->
