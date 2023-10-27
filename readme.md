@@ -115,6 +115,19 @@ train %>%
 We also want to check for missing values.
 
 ``` r
+train <- train %>%
+  # account for blank entries and spaces
+  mutate(
+    across(
+      everything(),
+      ~if_else(. %in% c("", " "), NA, .)
+    ),
+    # account for 0 values in fare
+    Fare = if_else(Fare == 0, NA, Fare)
+  )
+```
+
+``` r
 train %>% 
   summarise_all(list( ~sum(is.na(.)))) %>% 
   pivot_longer(cols = everything(), 
@@ -162,7 +175,7 @@ categorical_vars <- train %>%
 
 #### Numeric variables
 
-![](readme_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
 Quick glance at the total numbers of passengers travelling with their
 families.
@@ -189,26 +202,26 @@ families.
 
 #### Categorical variables
 
-![](readme_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 First, we will plot a correlation map to get an idea of the
 relationships between the variables.
 
-![](readme_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 PassengerID shows no correlations with any other variable. It is evenly
 distributed across passenger class and sex - the two strongest
 correlations with the target variable.
 
-![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
 We will remove it as it holds no predictive value.
 
-![](readme_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
 It is not apparent from the correlation map that age has any influence
 on survival. We do know however that children (and women) were more
@@ -217,14 +230,14 @@ relationship between survival and age is not linear as the likelihood of
 survival does not increase with age. Let us take a closer look at the
 distribution of survival rates across age for each sex.
 
-![](readme_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
 Let us look at the age distribution for both sexes in each passenger
 class.
 
-![](readme_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
 
 We can infer that females - in general - are more likely to survive. We
 also see a large proportion of deceased female passengers in the 3rd
@@ -238,14 +251,14 @@ more likely to survive than in other classes.
 
 Distribution of survivors based on the port of embarkation.
 
-![](readme_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
 
 It is apparent that the amount of survivors among the passengers
 embarking in Cherbourg is relatively higher than in Queenstown or
 Southhampton. From the correlation plot we know that this variable is
 correlated with passenger class.
 
-![](readme_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
 
 We see that among the passengers embarking in Cherbourg, the majority
 belonged to class 1, while the vast majority of passengers embarking in
@@ -279,24 +292,21 @@ train %>%
   count(Survived, Numeric_ticket, name = "Count") %>% 
   group_by(Numeric_ticket) %>% 
   mutate(Percentage = round(Count*100/sum(Count))) %>% 
-  arrange(Numeric_ticket)
+  arrange(Numeric_ticket) %>% 
+  kable()
 ```
 
-    ## # A tibble: 4 × 4
-    ## # Groups:   Numeric_ticket [2]
-    ##   Survived Numeric_ticket Count Percentage
-    ##   <fct>    <lgl>          <int>      <dbl>
-    ## 1 0        FALSE            142         62
-    ## 2 1        FALSE             88         38
-    ## 3 0        TRUE             407         62
-    ## 4 1        TRUE             254         38
+| Survived | Numeric_ticket | Count | Percentage |
+|:---------|:---------------|------:|-----------:|
+| 0        | FALSE          |   142 |         62 |
+| 1        | FALSE          |    88 |         38 |
+| 0        | TRUE           |   407 |         62 |
+| 1        | TRUE           |   254 |         38 |
 
 There is no difference in survival rate between numerical and
 non-numerical tickets. We have also divided each class further.
 
 ``` r
-options(tibble.print_max = 44, tibble.print_min = 4)
-
 train %>% 
   count(Survived, Ticket_group, name = "Count") %>% 
   group_by(Ticket_group) %>% 
@@ -376,16 +386,18 @@ train %>%
 
 There are too many groups to infer any meaningful pattern. Some groups
 could probably be merged. SC/paris and SC/PARIS are an obvious choice
-but others might be the result of ambiguous annotation.
+but others, like WEP and WE/P might be the result of ambiguous
+annotation.
+
+Hence, we will remove unimportant variables.
+
+``` r
+train_cln <- train %>% select(!c(Cabin, Ticket, Ticket_group, Numeric_ticket, PassengerId))
+```
 
 ### Imputation of missing values
 
-Let’s take a quick look at the variables with missing values. But first
-we will remove the Cabin and PassengerId columns.
-
-``` r
-train_cln <- train %>% select(!c(Cabin, PassengerId))
-```
+Let’s take a quick look at the variables with missing values.
 
 | Variable | Missing |
 |:---------|--------:|
@@ -450,7 +462,7 @@ For the imputation of fare we can look again at the correlation matrix.
 Passenger class and fare show the greatest correlation across all
 variables.
 
-![](readme_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
 
 ``` r
 train_imputed %>% 
@@ -463,16 +475,16 @@ train_imputed %>%
 
 | Pclass | Count | Mean_fare | Median_fare |
 |:-------|------:|----------:|------------:|
+| 3      |   491 |        13 |           8 |
 | 1      |   216 |        86 |          61 |
 | 2      |   184 |        21 |          15 |
-| 3      |   491 |        13 |           8 |
 
 From the differences between mean and median as well as the box plot
 above we see few but significant outliers. Fare is also correlated with
 passenger family size. Let us look at the fares across different family
 sizes in each passenger class.
 
-![](readme_files/figure-gfm/unnamed-chunk-39-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
 ``` r
 train_imputed %>% 
@@ -490,7 +502,7 @@ train_imputed %>%
   scale_fill_manual(values = wes_palette("GrandBudapest1", 8, type = "continuous"))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-40-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-38-1.png)<!-- -->
 
 We see that fares increase with family size, independent of passenger
 class. Since Parch and SibSp are correlated with each other we will
@@ -533,21 +545,21 @@ how we want to impute.
     ## # Groups:   Pclass [3]
     ##    Pclass Parch Fare_median Fare_mean    SD Count
     ##    <fct>  <int>       <dbl>     <dbl> <dbl> <int>
-    ##  1 1          0        52       70.4  67.6    163
-    ##  2 1          1        79      115.   95.1     31
-    ##  3 1          2       120      150    76.0     21
-    ##  4 1          4       263      263    NA        1
-    ##  5 2          0        13       18.1  12.7    134
-    ##  6 2          1        26       27.4   7.44    32
-    ##  7 2          2        27       33.2  14.9     16
-    ##  8 2          3        20.5     20.5   3.54     2
-    ##  9 3          0         7        9.61  7.32   381
-    ## 10 3          1        16       19.0   8.73    55
-    ## 11 3          2        31       33.3  18.7     43
-    ## 12 3          3        34       29     8.66     3
-    ## 13 3          4        27       25     3.46     3
-    ## 14 3          5        31       32.2   3.90     5
-    ## 15 3          6        46       46    NA        1
+    ##  1 3          0         7        9.61  7.32   381
+    ##  2 3          1        16       19.0   8.73    55
+    ##  3 3          2        31       33.3  18.7     43
+    ##  4 3          3        34       29     8.66     3
+    ##  5 3          4        27       25     3.46     3
+    ##  6 3          5        31       32.2   3.90     5
+    ##  7 3          6        46       46    NA        1
+    ##  8 1          0        52       70.4  67.6    163
+    ##  9 1          1        79      115.   95.1     31
+    ## 10 1          2       120      150    76.0     21
+    ## 11 1          4       263      263    NA        1
+    ## 12 2          0        13       18.1  12.7    134
+    ## 13 2          1        26       27.4   7.44    32
+    ## 14 2          2        27       33.2  14.9     16
+    ## 15 2          3        20.5     20.5   3.54     2
 
 Due to the large standard deviation in class 1 we choose the median for
 imputation of fares.
@@ -559,10 +571,11 @@ impute_fare <- function(df, na.rm = FALSE){
   
   grouped_median_fares <- df %>% 
     group_by(Pclass, Parch) %>% 
-    summarise(Fare_median = median(Fare, na.rm = TRUE))
+    summarise(Fare_median = median(Fare, na.rm = TRUE),
+              .groups = "drop") 
   
   df <- df %>%
-    left_join(grouped_median_fares, by = "Pclass") %>% 
+    left_join(grouped_median_fares, by = c("Pclass", "Parch")) %>% 
     mutate(Fare = coalesce(Fare, Fare_median)) %>%
     select(-Fare_median)
     
@@ -572,31 +585,21 @@ impute_fare <- function(df, na.rm = FALSE){
 
 Check missing values before and after imputation.
 
-| Pclass | Missing_fare_values |
-|:-------|--------------------:|
-| 1      |                   5 |
-| 2      |                   6 |
-| 3      |                   4 |
+| Pclass | Missing |
+|:-------|--------:|
+| 3      |       4 |
+| 1      |       5 |
+| 2      |       6 |
+
+| Pclass | Missing |
+|:-------|--------:|
+| 3      |       0 |
+| 1      |       0 |
+| 2      |       0 |
 
 ``` r
 train_imputed <- impute_fare(train_imputed)
 ```
-
-    ## `summarise()` has grouped output by 'Pclass'. You can override using the
-    ## `.groups` argument.
-
-``` r
-train_imputed %>% 
-  group_by(Pclass) %>% 
-  summarise(Missing_fare_values = sum(is.na(Fare))) %>% 
-  kable("simple")
-```
-
-| Pclass | Missing_fare_values |
-|:-------|--------------------:|
-| 1      |                   0 |
-| 2      |                   0 |
-| 3      |                   0 |
 
 #### Age imputation
 
@@ -622,23 +625,23 @@ train_imputed %>%
 
 | Title       | Count |
 |:------------|------:|
-| Mr          |  3025 |
-| Miss        |  1034 |
-| Mrs         |   626 |
-| Master      |   244 |
-| Dr          |    28 |
-| Rev         |    24 |
-| Col         |     8 |
-| Major       |     8 |
-| Mlle        |     8 |
-| Capt        |     4 |
-| Don         |     4 |
-| Jonkheer    |     4 |
-| Lady        |     4 |
-| Mme         |     4 |
-| Ms          |     4 |
-| Sir         |     4 |
-| theCountess |     4 |
+| Mr          |   517 |
+| Miss        |   182 |
+| Mrs         |   125 |
+| Master      |    40 |
+| Dr          |     7 |
+| Rev         |     6 |
+| Col         |     2 |
+| Major       |     2 |
+| Mlle        |     2 |
+| Capt        |     1 |
+| Don         |     1 |
+| Jonkheer    |     1 |
+| Lady        |     1 |
+| Mme         |     1 |
+| Ms          |     1 |
+| Sir         |     1 |
+| theCountess |     1 |
 
 We will create a small function for this operation.
 
@@ -650,7 +653,7 @@ extract_titles <- function(df, na.rm = FALSE){
              Title = str_extract(Name, ",([a-zA-Z]*)"),
              Title = gsub(",", "", Title)) %>% 
     # remove name variable
-      select(!Name)
+      select(-Name)
   
   return(df)
 }
@@ -660,11 +663,39 @@ extract_titles <- function(df, na.rm = FALSE){
 train_with_titles <- extract_titles(train_imputed)
 ```
 
-We want to have enough data in each group to perform robust imputation.
-Therefore will will merge all titles into four groups: Mr, Miss, Mrs and
-Master. We will merge “Lady”/“Countess”/“Ms” with “Mrs”, “Mme” with
-“Miss”, and all other titles with “Mr”. Create another function called
-“aggregate titles”.
+``` r
+train_with_titles %>% 
+  count(Title) %>% 
+  arrange(desc(n))
+```
+
+    ## # A tibble: 17 × 2
+    ##    Title           n
+    ##    <chr>       <int>
+    ##  1 Mr            517
+    ##  2 Miss          182
+    ##  3 Mrs           125
+    ##  4 Master         40
+    ##  5 Dr              7
+    ##  6 Rev             6
+    ##  7 Col             2
+    ##  8 Major           2
+    ##  9 Mlle            2
+    ## 10 Capt            1
+    ## 11 Don             1
+    ## 12 Jonkheer        1
+    ## 13 Lady            1
+    ## 14 Mme             1
+    ## 15 Ms              1
+    ## 16 Sir             1
+    ## 17 theCountess     1
+
+We now have extracted 17 distinct titles of which most have only few
+observations. To perform robust imputation we need enough data in each
+group. Therefore will will merge all titles into four groups: Mr, Miss,
+Mrs and Master. We will merge “Lady”/“Countess”/“Ms” with “Mrs”, “Mme”
+with “Miss”, and all other titles with “Mr”. Create another function
+called “aggregate titles”.
 
 ``` r
 aggregate_titles <- function(df, na.rm = FALSE){
@@ -692,62 +723,23 @@ aggregate_titles <- function(df, na.rm = FALSE){
 
 ``` r
 train_with_titles <- aggregate_titles(train_with_titles)
-
-train_with_titles %>% 
-  group_by(Title) %>% 
-  count(Title, name = "Count", sort = TRUE) %>% 
-  kable("simple")
 ```
 
-| Title  | Count |
-|:-------|------:|
-| Mr     |  3117 |
-| Miss   |  1038 |
-| Mrs    |   638 |
-| Master |   244 |
+| Title  | Count | Mean | Median |   SD |
+|:-------|------:|-----:|-------:|-----:|
+| Master |    40 |  4.5 |    3.5 |  3.7 |
+| Miss   |   183 | 21.8 |   21.0 | 13.0 |
+| Mr     |   540 | 33.0 |   30.0 | 13.0 |
+| Mrs    |   128 | 35.9 |   35.0 | 11.4 |
 
-| Title  |    n | mean | median |   sd |
-|:-------|-----:|-----:|-------:|-----:|
-| Master |  244 |  4.8 |      4 |  3.7 |
-| Miss   | 1038 | 20.3 |     20 | 12.4 |
-| Mr     | 3117 | 31.7 |     29 | 12.4 |
-| Mrs    |  638 | 35.5 |     34 | 11.1 |
+![](readme_files/figure-gfm/unnamed-chunk-51-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-53-1.png)<!-- -->
-
-![](readme_files/figure-gfm/unnamed-chunk-54-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-52-1.png)<!-- -->
 
 Since the title “Miss” is used for unmarried women, we will split the
 “miss” group based on whether they were traveling with Parents and/or
-children - assuming that those without are older.
-
-``` r
-train_with_titles %>% 
-  filter(!is.na(Age)) %>%  # & Title == "Miss") %>% 
-  mutate(Family = case_when(
-    "Parch" == 0 ~ "No",
-    TRUE ~ "Yes"
-  )) %>% 
-  ggplot(aes(x = Family,
-             y = Age)) +
-  geom_boxjitter(aes(fill = Family),
-                 position = position_dodge(width = 0.5),
-                 width = 0.4,
-                 jitter.shape = 21,
-                 jitter.color = NA,
-                 outlier.shape = 1,
-                 errorbar.draw = TRUE,
-                 errorbar.length = 0.4) +
-  labs(title = "Age distribution of male passengers in each class",
-       y = "Age",
-       x = "Traveling with family") +
-  facet_grid(~Title) +
-  theme_minimal() +
-  theme(axis.text.x = element_blank()) +
-  scale_fill_manual(values = wes_palette("GrandBudapest1"))
-```
-
-![](readme_files/figure-gfm/unnamed-chunk-55-1.png)<!-- --> Our
+children - assuming that those without are older.  
+![](readme_files/figure-gfm/unnamed-chunk-53-1.png)<!-- --> Our
 assumption turns out to be true so we will consider it within our
 imputation function. The same assumption seems to be true for young men
 (“Master”) but with just one observation there is not enough data to
@@ -764,7 +756,8 @@ impute_age <- function(df){
     mutate(Title = ifelse(Title == "Miss" & "Parch" > 0, "Miss_fam", Title)) %>% 
     group_by(Title) %>% 
     summarise(Mean = round(mean(Age, na.rm = TRUE)),
-              SD = round(sd(Age, na.rm = TRUE)))
+              SD = round(sd(Age, na.rm = TRUE)),
+              .groups = "drop")
   
   # helper function for sampling from a normal distribution but within one standard deviation from the mean
   sample_rnorm_within_bounds <- function(mean, sd, lower = mean - sd, upper = mean + sd, max_attempts = 1000) {
@@ -785,10 +778,14 @@ impute_age <- function(df){
     rowwise() %>% 
     mutate(Age = ifelse(
       is.na(Age),
-      round(rnorm(1, mean = Mean, sd = SD)),
+      round(
+        sample_rnorm_within_bounds(mean = Mean, sd = SD)
+        ),
       Age
-    )) %>% 
-    select(-c(Mean, SD, Title))
+      )
+    ) %>% 
+    ungroup() %>% 
+    select(-c(Mean, SD))
   
   return(df_age_imputed)
 }
@@ -798,14 +795,12 @@ Again we will compare the number of missing values before
 
 | Title  | Missing |
 |:-------|--------:|
-| Master |      28 |
-| Miss   |     243 |
-| Mr     |     750 |
-| Mrs    |      95 |
+| Master |       4 |
+| Miss   |      36 |
+| Mr     |     120 |
+| Mrs    |      17 |
 
 and after imputation
-
-    ## Adding missing grouping variables: `Title`
 
 | Title    | Missing |
 |:---------|--------:|
@@ -830,10 +825,10 @@ train_with_titles %>%
 
 | Title    | Count | Mean |   SD |
 |:---------|------:|-----:|-----:|
-| Master   |   216 |  4.8 |  3.7 |
-| Miss_fam |   795 | 20.3 | 12.4 |
-| Mr       |  2367 | 31.7 | 12.4 |
-| Mrs      |   543 | 35.5 | 11.1 |
+| Master   |    36 |  4.5 |  3.7 |
+| Miss_fam |   147 | 21.8 | 13.0 |
+| Mr       |   420 | 33.0 | 13.0 |
+| Mrs      |   111 | 35.9 | 11.4 |
 
 with the imputed values
 
@@ -842,18 +837,17 @@ impute_age(train_with_titles) %>%
   group_by(Title) %>% 
     summarise(Count = n(),
       Mean = round(mean(Age, na.rm = TRUE), 1),
-      SD   = round(sd(Age, na.rm = TRUE), 1)) %>% 
+      SD   = round(sd(Age, na.rm = TRUE), 1),
+      .groups = "drop") %>% 
   kable("simple")
 ```
 
-    ## Adding missing grouping variables: `Title`
-
 | Title    | Count | Mean |   SD |
 |:---------|------:|-----:|-----:|
-| Master   |   244 |  4.9 |  3.8 |
-| Miss_fam |  1038 | 20.0 | 12.4 |
-| Mr       |  3117 | 31.7 | 12.3 |
-| Mrs      |   638 | 35.3 | 11.0 |
+| Master   |    40 |  4.3 |  3.6 |
+| Miss_fam |   183 | 21.7 | 11.9 |
+| Mr       |   540 | 32.9 | 11.9 |
+| Mrs      |   128 | 35.9 | 10.9 |
 
 We can also compare the densities of Age before and after imputation.
 
@@ -864,7 +858,7 @@ train_with_titles %>%
   geom_density(aes(x = Age))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-61-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-59-1.png)<!-- -->
 
 ``` r
 impute_age(train_with_titles) %>% 
@@ -872,138 +866,22 @@ impute_age(train_with_titles) %>%
   geom_density(aes(x = Age))
 ```
 
-    ## Adding missing grouping variables: `Title`
-
-![](readme_files/figure-gfm/unnamed-chunk-62-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-60-1.png)<!-- -->
 
 ``` r
-train_complete <- impute_age(train_with_titles)
+train_complete <- impute_age(train_with_titles) %>% 
+  select(-Title)
 ```
 
-    ## Adding missing grouping variables: `Title`
-
-``` r
-str(train_complete)
-```
-
-    ## rowws_df [5,037 × 13] (S3: rowwise_df/tbl_df/tbl/data.frame)
-    ##  $ Title         : chr [1:5037] "Mr" "Mr" "Mr" "Mr" ...
-    ##  $ Survived      : Factor w/ 2 levels "0","1": 1 1 1 1 1 1 1 2 2 2 ...
-    ##  $ Pclass        : Factor w/ 3 levels "1","2","3": 3 3 3 3 3 3 3 1 1 1 ...
-    ##  $ Sex           : Factor w/ 2 levels "female","male": 2 2 2 2 2 2 2 1 1 1 ...
-    ##  $ Age           : num [1:5037] 22 22 22 22 22 22 22 38 38 38 ...
-    ##  $ SibSp         : int [1:5037] 1 1 1 1 1 1 1 1 1 1 ...
-    ##  $ Parch.x       : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Ticket        : chr [1:5037] "A/5 21171" "A/5 21171" "A/5 21171" "A/5 21171" ...
-    ##  $ Fare          : num [1:5037] 7 7 7 7 7 7 7 71 71 71 ...
-    ##  $ Embarked      : chr [1:5037] "S" "S" "S" "S" ...
-    ##  $ Numeric_ticket: logi [1:5037] FALSE FALSE FALSE FALSE FALSE FALSE ...
-    ##  $ Ticket_group  : chr [1:5037] "A/5" "A/5" "A/5" "A/5" ...
-    ##  $ Parch.y       : int [1:5037] 0 1 2 3 4 5 6 0 1 2 ...
-    ##  - attr(*, "groups")= tibble [5,037 × 2] (S3: tbl_df/tbl/data.frame)
-    ##   ..$ Title: chr [1:5037] "Mr" "Mr" "Mr" "Mr" ...
-    ##   ..$ .rows: list<int> [1:5037] 
-    ##   .. ..$ : int 1
-    ##   .. ..$ : int 2
-    ##   .. ..$ : int 3
-    ##   .. ..$ : int 4
-    ##   .. ..$ : int 5
-    ##   .. ..$ : int 6
-    ##   .. ..$ : int 7
-    ##   .. ..$ : int 8
-    ##   .. ..$ : int 9
-    ##   .. ..$ : int 10
-    ##   .. ..$ : int 11
-    ##   .. ..$ : int 12
-    ##   .. ..$ : int 13
-    ##   .. ..$ : int 14
-    ##   .. ..$ : int 15
-    ##   .. ..$ : int 16
-    ##   .. ..$ : int 17
-    ##   .. ..$ : int 18
-    ##   .. ..$ : int 19
-    ##   .. ..$ : int 20
-    ##   .. ..$ : int 21
-    ##   .. ..$ : int 22
-    ##   .. ..$ : int 23
-    ##   .. ..$ : int 24
-    ##   .. ..$ : int 25
-    ##   .. ..$ : int 26
-    ##   .. ..$ : int 27
-    ##   .. ..$ : int 28
-    ##   .. ..$ : int 29
-    ##   .. ..$ : int 30
-    ##   .. ..$ : int 31
-    ##   .. ..$ : int 32
-    ##   .. ..$ : int 33
-    ##   .. ..$ : int 34
-    ##   .. ..$ : int 35
-    ##   .. ..$ : int 36
-    ##   .. ..$ : int 37
-    ##   .. ..$ : int 38
-    ##   .. ..$ : int 39
-    ##   .. ..$ : int 40
-    ##   .. ..$ : int 41
-    ##   .. ..$ : int 42
-    ##   .. ..$ : int 43
-    ##   .. ..$ : int 44
-    ##   .. ..$ : int 45
-    ##   .. ..$ : int 46
-    ##   .. ..$ : int 47
-    ##   .. ..$ : int 48
-    ##   .. ..$ : int 49
-    ##   .. ..$ : int 50
-    ##   .. ..$ : int 51
-    ##   .. ..$ : int 52
-    ##   .. ..$ : int 53
-    ##   .. ..$ : int 54
-    ##   .. ..$ : int 55
-    ##   .. ..$ : int 56
-    ##   .. ..$ : int 57
-    ##   .. ..$ : int 58
-    ##   .. ..$ : int 59
-    ##   .. ..$ : int 60
-    ##   .. ..$ : int 61
-    ##   .. ..$ : int 62
-    ##   .. ..$ : int 63
-    ##   .. ..$ : int 64
-    ##   .. ..$ : int 65
-    ##   .. ..$ : int 66
-    ##   .. ..$ : int 67
-    ##   .. ..$ : int 68
-    ##   .. ..$ : int 69
-    ##   .. ..$ : int 70
-    ##   .. ..$ : int 71
-    ##   .. ..$ : int 72
-    ##   .. ..$ : int 73
-    ##   .. ..$ : int 74
-    ##   .. ..$ : int 75
-    ##   .. ..$ : int 76
-    ##   .. ..$ : int 77
-    ##   .. ..$ : int 78
-    ##   .. ..$ : int 79
-    ##   .. ..$ : int 80
-    ##   .. ..$ : int 81
-    ##   .. ..$ : int 82
-    ##   .. ..$ : int 83
-    ##   .. ..$ : int 84
-    ##   .. ..$ : int 85
-    ##   .. ..$ : int 86
-    ##   .. ..$ : int 87
-    ##   .. ..$ : int 88
-    ##   .. ..$ : int 89
-    ##   .. ..$ : int 90
-    ##   .. ..$ : int 91
-    ##   .. ..$ : int 92
-    ##   .. ..$ : int 93
-    ##   .. ..$ : int 94
-    ##   .. ..$ : int 95
-    ##   .. ..$ : int 96
-    ##   .. ..$ : int 97
-    ##   .. ..$ : int 98
-    ##   .. ..$ : int 99
-    ##   .. .. [list output truncated]
-    ##   .. ..@ ptype: int(0)
+    ## tibble [891 × 8] (S3: tbl_df/tbl/data.frame)
+    ##  $ Survived: Factor w/ 2 levels "0","1": 1 2 2 2 1 1 1 1 2 2 ...
+    ##  $ Pclass  : Factor w/ 3 levels "3","1","2": 1 2 1 2 1 1 2 1 1 3 ...
+    ##  $ Sex     : Factor w/ 2 levels "male","female": 1 2 2 2 1 1 1 1 2 2 ...
+    ##  $ Age     : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
+    ##  $ SibSp   : int [1:891] 1 1 0 1 0 0 0 3 0 1 ...
+    ##  $ Parch   : int [1:891] 0 0 0 0 0 0 0 1 2 0 ...
+    ##  $ Fare    : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
+    ##  $ Embarked: chr [1:891] "S" "C" "S" "S" ...
 
 ### EDA summary
 
@@ -1121,9 +999,22 @@ First, we will separate our target variable from the predictor
 variables.
 
 ``` r
-train_y <- train_imputed$Survived
-train_x <- train_imputed %>% select(-Survived)
+train_y <- train_complete$Survived
+train_x <- train_complete %>% select(-Survived)
 ```
+
+``` r
+str(train_x)
+```
+
+    ## tibble [891 × 7] (S3: tbl_df/tbl/data.frame)
+    ##  $ Pclass  : Factor w/ 3 levels "3","1","2": 1 2 1 2 1 1 2 1 1 3 ...
+    ##  $ Sex     : Factor w/ 2 levels "male","female": 1 2 2 2 1 1 1 1 2 2 ...
+    ##  $ Age     : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
+    ##  $ SibSp   : int [1:891] 1 1 0 1 0 0 0 3 0 1 ...
+    ##  $ Parch   : int [1:891] 0 0 0 0 0 0 0 1 2 0 ...
+    ##  $ Fare    : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
+    ##  $ Embarked: chr [1:891] "S" "C" "S" "S" ...
 
 In this section we will encode categorical variables and look for
 correlated variables to remove. We will use the fastDummies package to
@@ -1139,111 +1030,21 @@ train_x_fe <- train_x %>%
                              remove_selected_columns = TRUE)
 ```
 
-``` r
-str(train_x_fe)
-```
-
-    ## tibble [5,037 × 1,629] (S3: tbl_df/tbl/data.frame)
-    ##  $ Age                                                                                    : int [1:5037] 22 22 22 22 22 22 22 38 38 38 ...
-    ##  $ Parch.x                                                                                : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Fare                                                                                   : num [1:5037] 7 7 7 7 7 7 7 71 71 71 ...
-    ##  $ Numeric_ticket                                                                         : logi [1:5037] FALSE FALSE FALSE FALSE FALSE FALSE ...
-    ##  $ Parch.y                                                                                : int [1:5037] 0 1 2 3 4 5 6 0 1 2 ...
-    ##  $ Pclass_2                                                                               : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Pclass_3                                                                               : int [1:5037] 1 1 1 1 1 1 1 0 0 0 ...
-    ##  $ Name_Abbott, Mr. Rossmore Edward                                                       : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Abbott, Mrs. Stanton (Rosa Hunt)                                                  : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Abelson, Mr. Samuel                                                               : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Abelson, Mrs. Samuel (Hannah Wizosky)                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Adahl, Mr. Mauritz Nils Martin                                                    : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Adams, Mr. John                                                                   : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Ahlin, Mrs. Johan (Johanna Persdotter Larsson)                                    : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Aks, Mrs. Sam (Leah Rosen)                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Albimona, Mr. Nassef Cassem                                                       : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Alexander, Mr. William                                                            : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Alhomaki, Mr. Ilmari Rudolf                                                       : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Ali, Mr. Ahmed                                                                    : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Ali, Mr. William                                                                  : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Allen, Miss. Elisabeth Walton                                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Allen, Mr. William Henry                                                          : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Allison, Master. Hudson Trevor                                                    : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Allison, Miss. Helen Loraine                                                      : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Allison, Mrs. Hudson J C (Bessie Waldo Daniels)                                   : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Allum, Mr. Owen George                                                            : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersen-Jensen, Miss. Carla Christine Nielsine                                   : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Anderson, Mr. Harry                                                               : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Master. Sigvard Harald Elias                                           : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Miss. Ebba Iris Alfrida                                                : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Miss. Ellis Anna Maria                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Miss. Erna Alexandra                                                   : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Miss. Ingeborg Constanzia                                              : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Miss. Sigrid Elisabeth                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Mr. Anders Johan                                                       : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Mr. August Edvard ("Wennerstrom")                                      : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andersson, Mrs. Anders Johan (Alfrida Konstantia Brogren)                         : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andreasson, Mr. Paul Edvin                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andrew, Mr. Edgardo Samuel                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andrews, Miss. Kornelia Theodosia                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Andrews, Mr. Thomas Jr                                                            : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Angle, Mrs. William A (Florence "Mary" Agnes Hughes)                              : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Appleton, Mrs. Edward Dale (Charlotte Lamson)                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Arnold-Franchi, Mr. Josef                                                         : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Arnold-Franchi, Mrs. Josef (Josefine Franchi)                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Artagaveytia, Mr. Ramon                                                           : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Asim, Mr. Adola                                                                   : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Asplund, Master. Clarence Gustaf Hugo                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Asplund, Master. Edvin Rojj Felix                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Asplund, Miss. Lillian Gertrud                                                    : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Asplund, Mrs. Carl Oscar (Selma Augusta Emilia Johansson)                         : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Astor, Mrs. John Jacob (Madeleine Talmadge Force)                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Attalah, Miss. Malake                                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Attalah, Mr. Sleiman                                                              : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Aubart, Mme. Leontine Pauline                                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Augustsson, Mr. Albert                                                            : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Ayoub, Miss. Banoura                                                              : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Backstrom, Mr. Karl Alfred                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Backstrom, Mrs. Karl Alfred (Maria Mathilda Gustafsson)                           : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Baclini, Miss. Eugenie                                                            : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Baclini, Miss. Helene Barbara                                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Baclini, Miss. Marie Catherine                                                    : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Baclini, Mrs. Solomon (Latifa Qurban)                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Badt, Mr. Mohamed                                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bailey, Mr. Percy Andrew                                                          : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Balkic, Mr. Cerin                                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Ball, Mrs. (Ada E Hall)                                                           : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Banfield, Mr. Frederick James                                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Barah, Mr. Hanna Assi                                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Barbara, Miss. Saiide                                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Barbara, Mrs. (Catherine David)                                                   : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Barber, Miss. Ellen "Nellie"                                                      : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Barkworth, Mr. Algernon Henry Wilson                                              : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Barton, Mr. David John                                                            : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bateman, Rev. Robert James                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Baumann, Mr. John D                                                               : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Baxter, Mr. Quigg Edmond                                                          : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Baxter, Mrs. James (Helene DeLaudeniere Chaput)                                   : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bazzani, Miss. Albina                                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Beane, Mr. Edward                                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Beane, Mrs. Edward (Ethel Clarke)                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Beavan, Mr. William Thomas                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Becker, Master. Richard F                                                         : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Becker, Miss. Marion Louise                                                       : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Beckwith, Mr. Richard Leonard                                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Beckwith, Mrs. Richard Leonard (Sallie Monypeny)                                  : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Beesley, Mr. Lawrence                                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Behr, Mr. Karl Howell                                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bengtsson, Mr. John Viktor                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Berglund, Mr. Karl Ivar Sven                                                      : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Berriman, Mr. William John                                                        : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Betros, Mr. Tannous                                                               : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bidois, Miss. Rosalie                                                             : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bing, Mr. Lee                                                                     : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Birkeland, Mr. Hans Martin Monsen                                                 : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bishop, Mr. Dickinson H                                                           : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bishop, Mrs. Dickinson H (Helen Walton)                                           : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bissette, Miss. Amelia                                                            : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Name_Bjornstrom-Steffansson, Mr. Mauritz Hakan                                         : int [1:5037] 0 0 0 0 0 0 0 0 0 0 ...
-    ##   [list output truncated]
+    ## tibble [891 × 14] (S3: tbl_df/tbl/data.frame)
+    ##  $ Age       : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
+    ##  $ Fare      : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
+    ##  $ Pclass_1  : int [1:891] 0 1 0 1 0 0 1 0 0 0 ...
+    ##  $ Pclass_2  : int [1:891] 0 0 0 0 0 0 0 0 0 1 ...
+    ##  $ Sex_female: int [1:891] 0 1 1 1 0 0 0 0 1 1 ...
+    ##  $ SibSp_1   : int [1:891] 1 1 0 1 0 0 0 0 0 1 ...
+    ##  $ SibSp_2   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ SibSp_3   : int [1:891] 0 0 0 0 0 0 0 1 0 0 ...
+    ##  $ SibSp_4   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ SibSp_5   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ SibSp_8   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Parch_    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Embarked_Q: int [1:891] 0 0 0 0 0 1 0 0 0 0 ...
+    ##  $ Embarked_S: int [1:891] 1 0 1 1 1 0 1 1 1 0 ...
 
 In our approach we will compare tree-based models and logistic
 regression. While the former are insensitive to distributions, logistic
@@ -1251,7 +1052,7 @@ regression might perform better when features are scaled uniformly.
 There are still two numeric variables in the data: fare and age. Let us
 again look at their distributions.
 
-![](readme_files/figure-gfm/unnamed-chunk-70-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-68-1.png)<!-- -->
 
 The distribution of fare is right-skewed. We will transform it to log
 scale.
