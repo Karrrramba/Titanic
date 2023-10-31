@@ -17,10 +17,10 @@ library(wesanderson)
 library(knitr)
 
 # Feature engineering
-# library(fastDummies)
+library(fastDummies)
 
 # Models
-# library(caret)
+library(caret)
 ```
 
 Set seed for reproducibility
@@ -116,13 +116,13 @@ We also want to check for missing values.
 
 ``` r
 train <- train %>%
-  # account for blank entries and spaces
+  # encode blank entries and spaces
   mutate(
     across(
       everything(),
       ~if_else(. %in% c("", " "), NA, .)
     ),
-    # account for 0 values in fare
+    # encode 0 values in fare
     Fare = if_else(Fare == 0, NA, Fare)
   )
 ```
@@ -158,8 +158,6 @@ train %>%
 We will impute missing values later on. For now, we want to proceed with
 data visualization.
 
-## Data visualization
-
 We will divide the variables into numeric and categorical and visualize
 each group.
 
@@ -173,9 +171,9 @@ categorical_vars <- train %>%
   names()
 ```
 
-#### Numeric variables
+### Numeric variables
 
-![](readme_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 Quick glance at the total numbers of passengers travelling with their
 families.
@@ -200,28 +198,32 @@ families.
 |     5 |     5 |
 |     6 |     1 |
 
-#### Categorical variables
+### Categorical variables
 
-![](readme_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 First, we will plot a correlation map to get an idea of the
 relationships between the variables.
 
-![](readme_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
+
+### Passenger ID
 
 PassengerID shows no correlations with any other variable. It is evenly
 distributed across passenger class and sex - the two strongest
 correlations with the target variable.
 
-![](readme_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
-
 ![](readme_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
-
-We will remove it as it holds no predictive value.
 
 ![](readme_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
+We will remove it as it holds no predictive value.
+
+### Sex
+
 ![](readme_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+
+![](readme_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
 It is not apparent from the correlation map that age has any influence
 on survival. We do know however that children (and women) were more
@@ -230,14 +232,16 @@ relationship between survival and age is not linear as the likelihood of
 survival does not increase with age. Let us take a closer look at the
 distribution of survival rates across age for each sex.
 
-![](readme_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+### Age
+
+![](readme_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
 Let us look at the age distribution for both sexes in each passenger
 class.
 
-![](readme_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
-
 ![](readme_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+
+![](readme_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
 
 We can infer that females - in general - are more likely to survive. We
 also see a large proportion of deceased female passengers in the 3rd
@@ -249,21 +253,21 @@ of survival for females. For males the proportion of survivors is
 smaller irrespective of class. Male passengers in first class were much
 more likely to survive than in other classes.
 
-Distribution of survivors based on the port of embarkation.
+### Embarked
 
-![](readme_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
 
 It is apparent that the amount of survivors among the passengers
 embarking in Cherbourg is relatively higher than in Queenstown or
 Southhampton. From the correlation plot we know that this variable is
 correlated with passenger class.
 
-![](readme_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-26-1.png)<!-- --> We see that
+among the passengers embarking in Cherbourg, the majority belonged to
+class 1, while the vast majority of passengers embarking in Queensland
+(with the lowest proportion of survivors) belonged to the 3rd class.
 
-We see that among the passengers embarking in Cherbourg, the majority
-belonged to class 1, while the vast majority of passengers embarking in
-Queensland (with the lowest proportion of survivors) belonged to the 3rd
-class.
+### Ticket
 
 The ticket column contains numeric and mixed entries. We will
 investigate whether there are any differences in the ticket types,
@@ -304,7 +308,7 @@ train %>%
 | 1        | TRUE           |   254 |         38 |
 
 There is no difference in survival rate between numerical and
-non-numerical tickets. We have also divided each class further.
+non-numerical tickets. We can further divide each class.
 
 ``` r
 train %>% 
@@ -385,19 +389,150 @@ train %>%
 | 0        | WEP          |     1 |        100 |
 
 There are too many groups to infer any meaningful pattern. Some groups
-could probably be merged. SC/paris and SC/PARIS are an obvious choice
+could probably be merged: SC/paris and SC/PARIS are an obvious choice
 but others, like WEP and WE/P might be the result of ambiguous
 annotation.
 
-Hence, we will remove unimportant variables.
+At last, we will try to infer information of the passenger group size
+from the ticket to capture relationships other than family.
+
+``` r
+train %>% 
+  mutate(Fam_size = SibSp + Parch) %>%
+  count(Fam_size, Ticket, name = "Count") %>% 
+  ungroup() %>% 
+  count(Fam_size, Count)
+```
+
+    ## # A tibble: 26 × 3
+    ##    Fam_size Count     n
+    ##       <int> <int> <int>
+    ##  1        0     1   478
+    ##  2        0     2    18
+    ##  3        0     3     4
+    ##  4        0     4     1
+    ##  5        0     7     1
+    ##  6        1     1    71
+    ##  7        1     2    45
+    ##  8        2     1    31
+    ##  9        2     2    22
+    ## 10        2     3     9
+    ## # ℹ 16 more rows
+
+### Cabin
+
+The cabin variables has the highest proportion of missing values - too
+many to impute them. We will try to extract meaningful information
+anyway. The values start with a character (the deck) followed by the
+cabin number. We will group cabin values based on the deck.
+
+``` r
+train %>% 
+  mutate(Deck = substring(Cabin, 1, 1),
+         # rename NAs as "M" for missing
+         Deck = replace_na(Deck, "M")) %>% 
+  count(Deck, name = "Observations")
+```
+
+    ## # A tibble: 9 × 2
+    ##   Deck  Observations
+    ##   <chr>        <int>
+    ## 1 A               15
+    ## 2 B               47
+    ## 3 C               59
+    ## 4 D               33
+    ## 5 E               32
+    ## 6 F               13
+    ## 7 G                4
+    ## 8 M              687
+    ## 9 T                1
+
+``` r
+train <- train %>% 
+  mutate(Deck = substring(Cabin, 1, 1),
+         # rename NAs as "M" for missing
+         Deck = replace_na(Deck, "M"))
+```
+
+Let us look at the distributions of survivora and passenger class across
+decks.
+
+![](readme_files/figure-gfm/Deck%20Survived-1.png)<!-- -->
+
+![](readme_files/figure-gfm/Deck%20PClass-1.png)<!-- --> Strinkingly,
+the T deck is populated exclusively by 1st class-passengers, oh whom all
+did not survive. This may be indicative of spatial and not class-based
+relation to survival.
+
+``` r
+train %>% 
+  filter(Deck == "M") %>% 
+  count(Pclass, Survived) %>% 
+  mutate(Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  ggplot(aes(x = Pclass,
+             y = n,
+           fill = Survived)) +
+  geom_bar(stat="identity",
+           width = 0.4,
+           position = position_dodge(width = 0.6)) +
+  labs(title = "Passenger class and survivors among missing cabin values",
+       y = "Passengers",
+       x = "Class",
+       fill = "Survival status") +
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+
+### EDA summary
+
+Sex and passenger class are highly correlated with survival.
+
+The cabin variable has too many missing values and thus will be removed.
+The porportion of missing values in the variables “Embarked”, “Fare” and
+“Age” is low enough to impute them.
+
+Passenger ID and Ticket can also be dropped as they hold no predictive
+value.
+
+## Feature engineering
+
+We will - Remove unnecessary variables - Combine Parch and SibSp into a
+single variable “family size” - Encode categorical features - Imputed
+missing values in - Embarked - Age - Fare
+
+### Family variable
+
+``` r
+train %>% 
+  mutate(Family_size = Parch + SibSp) %>% 
+  count(Family_size) %>% 
+  ggplot(
+    aes(x = factor(Family_size),
+        y = n),
+    fill = Family_size) +
+  geom_bar(stat = "identity") +
+  labs(title = "Passenger traveling with family",
+       y = "Count",
+       x = "Family size") +
+  # facet_grid(~Pclass) + 
+  theme_minimal() +
+  scale_fill_manual(values = wes_palette("GrandBudapest1", 9, type = "continuous"))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-35-1.png)<!-- --> \### Remove
+columns
 
 ``` r
 train_cln <- train %>% select(!c(Cabin, Ticket, Ticket_group, Numeric_ticket, PassengerId))
 ```
 
-### Imputation of missing values
+### Imputation
 
-Let’s take a quick look at the variables with missing values.
+Let us take a quick look at the variables with missing values.
 
 | Variable | Missing |
 |:---------|--------:|
@@ -462,7 +597,7 @@ For the imputation of fare we can look again at the correlation matrix.
 Passenger class and fare show the greatest correlation across all
 variables.
 
-![](readme_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-42-1.png)<!-- -->
 
 ``` r
 train_imputed %>% 
@@ -475,16 +610,16 @@ train_imputed %>%
 
 | Pclass | Count | Mean_fare | Median_fare |
 |:-------|------:|----------:|------------:|
-| 3      |   491 |        13 |           8 |
 | 1      |   216 |        86 |          61 |
 | 2      |   184 |        21 |          15 |
+| 3      |   491 |        13 |           8 |
 
 From the differences between mean and median as well as the box plot
 above we see few but significant outliers. Fare is also correlated with
 passenger family size. Let us look at the fares across different family
 sizes in each passenger class.
 
-![](readme_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-44-1.png)<!-- -->
 
 ``` r
 train_imputed %>% 
@@ -502,7 +637,7 @@ train_imputed %>%
   scale_fill_manual(values = wes_palette("GrandBudapest1", 8, type = "continuous"))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-38-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-45-1.png)<!-- -->
 
 We see that fares increase with family size, independent of passenger
 class. Since Parch and SibSp are correlated with each other we will
@@ -545,21 +680,21 @@ how we want to impute.
     ## # Groups:   Pclass [3]
     ##    Pclass Parch Fare_median Fare_mean    SD Count
     ##    <fct>  <int>       <dbl>     <dbl> <dbl> <int>
-    ##  1 3          0         7        9.61  7.32   381
-    ##  2 3          1        16       19.0   8.73    55
-    ##  3 3          2        31       33.3  18.7     43
-    ##  4 3          3        34       29     8.66     3
-    ##  5 3          4        27       25     3.46     3
-    ##  6 3          5        31       32.2   3.90     5
-    ##  7 3          6        46       46    NA        1
-    ##  8 1          0        52       70.4  67.6    163
-    ##  9 1          1        79      115.   95.1     31
-    ## 10 1          2       120      150    76.0     21
-    ## 11 1          4       263      263    NA        1
-    ## 12 2          0        13       18.1  12.7    134
-    ## 13 2          1        26       27.4   7.44    32
-    ## 14 2          2        27       33.2  14.9     16
-    ## 15 2          3        20.5     20.5   3.54     2
+    ##  1 1          0        52       70.4  67.6    163
+    ##  2 1          1        79      115.   95.1     31
+    ##  3 1          2       120      150    76.0     21
+    ##  4 1          4       263      263    NA        1
+    ##  5 2          0        13       18.1  12.7    134
+    ##  6 2          1        26       27.4   7.44    32
+    ##  7 2          2        27       33.2  14.9     16
+    ##  8 2          3        20.5     20.5   3.54     2
+    ##  9 3          0         7        9.61  7.32   381
+    ## 10 3          1        16       19.0   8.73    55
+    ## 11 3          2        31       33.3  18.7     43
+    ## 12 3          3        34       29     8.66     3
+    ## 13 3          4        27       25     3.46     3
+    ## 14 3          5        31       32.2   3.90     5
+    ## 15 3          6        46       46    NA        1
 
 Due to the large standard deviation in class 1 we choose the median for
 imputation of fares.
@@ -587,15 +722,15 @@ Check missing values before and after imputation.
 
 | Pclass | Missing |
 |:-------|--------:|
-| 3      |       4 |
 | 1      |       5 |
 | 2      |       6 |
+| 3      |       4 |
 
 | Pclass | Missing |
 |:-------|--------:|
-| 3      |       0 |
 | 1      |       0 |
 | 2      |       0 |
+| 3      |       0 |
 
 ``` r
 train_imputed <- impute_fare(train_imputed)
@@ -732,14 +867,14 @@ train_with_titles <- aggregate_titles(train_with_titles)
 | Mr     |   540 | 33.0 |   30.0 | 13.0 |
 | Mrs    |   128 | 35.9 |   35.0 | 11.4 |
 
-![](readme_files/figure-gfm/unnamed-chunk-51-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-58-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-52-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-59-1.png)<!-- -->
 
 Since the title “Miss” is used for unmarried women, we will split the
 “miss” group based on whether they were traveling with Parents and/or
 children - assuming that those without are older.  
-![](readme_files/figure-gfm/unnamed-chunk-53-1.png)<!-- --> Our
+![](readme_files/figure-gfm/unnamed-chunk-60-1.png)<!-- --> Our
 assumption turns out to be true so we will consider it within our
 imputation function. The same assumption seems to be true for young men
 (“Master”) but with just one observation there is not enough data to
@@ -858,7 +993,7 @@ train_with_titles %>%
   geom_density(aes(x = Age))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-59-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-66-1.png)<!-- -->
 
 ``` r
 impute_age(train_with_titles) %>% 
@@ -866,29 +1001,23 @@ impute_age(train_with_titles) %>%
   geom_density(aes(x = Age))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-60-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-67-1.png)<!-- -->
 
 ``` r
 train_complete <- impute_age(train_with_titles) %>% 
   select(-Title)
 ```
 
-    ## tibble [891 × 8] (S3: tbl_df/tbl/data.frame)
+    ## tibble [891 × 9] (S3: tbl_df/tbl/data.frame)
     ##  $ Survived: Factor w/ 2 levels "0","1": 1 2 2 2 1 1 1 1 2 2 ...
-    ##  $ Pclass  : Factor w/ 3 levels "3","1","2": 1 2 1 2 1 1 2 1 1 3 ...
+    ##  $ Pclass  : Factor w/ 3 levels "1","2","3": 3 1 3 1 3 3 1 3 3 2 ...
     ##  $ Sex     : Factor w/ 2 levels "male","female": 1 2 2 2 1 1 1 1 2 2 ...
     ##  $ Age     : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
     ##  $ SibSp   : int [1:891] 1 1 0 1 0 0 0 3 0 1 ...
     ##  $ Parch   : int [1:891] 0 0 0 0 0 0 0 1 2 0 ...
     ##  $ Fare    : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
     ##  $ Embarked: chr [1:891] "S" "C" "S" "S" ...
-
-### EDA summary
-
-Quick review of the actions we have take after initial data
-exploratio: - Imputed missing values in - Embarked: mode - Age: mean of
-sex based on Parch - Fare: mean of passenger class based on Parch -
-Removed unnecessary variables: - Name - Cabin - Passenger ID - Ticket
+    ##  $ Deck    : chr [1:891] "M" "C" "M" "C" ...
 
 For ease of application we will implement all of the steps outlined
 above into a handy function for data clean up and imputation.
@@ -1007,14 +1136,15 @@ train_x <- train_complete %>% select(-Survived)
 str(train_x)
 ```
 
-    ## tibble [891 × 7] (S3: tbl_df/tbl/data.frame)
-    ##  $ Pclass  : Factor w/ 3 levels "3","1","2": 1 2 1 2 1 1 2 1 1 3 ...
+    ## tibble [891 × 8] (S3: tbl_df/tbl/data.frame)
+    ##  $ Pclass  : Factor w/ 3 levels "1","2","3": 3 1 3 1 3 3 1 3 3 2 ...
     ##  $ Sex     : Factor w/ 2 levels "male","female": 1 2 2 2 1 1 1 1 2 2 ...
     ##  $ Age     : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
     ##  $ SibSp   : int [1:891] 1 1 0 1 0 0 0 3 0 1 ...
     ##  $ Parch   : int [1:891] 0 0 0 0 0 0 0 1 2 0 ...
     ##  $ Fare    : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
     ##  $ Embarked: chr [1:891] "S" "C" "S" "S" ...
+    ##  $ Deck    : chr [1:891] "M" "C" "M" "C" ...
 
 In this section we will encode categorical variables and look for
 correlated variables to remove. We will use the fastDummies package to
@@ -1030,11 +1160,11 @@ train_x_fe <- train_x %>%
                              remove_selected_columns = TRUE)
 ```
 
-    ## tibble [891 × 14] (S3: tbl_df/tbl/data.frame)
+    ## tibble [891 × 22] (S3: tbl_df/tbl/data.frame)
     ##  $ Age       : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
     ##  $ Fare      : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
-    ##  $ Pclass_1  : int [1:891] 0 1 0 1 0 0 1 0 0 0 ...
     ##  $ Pclass_2  : int [1:891] 0 0 0 0 0 0 0 0 0 1 ...
+    ##  $ Pclass_3  : int [1:891] 1 0 1 0 1 1 0 1 1 0 ...
     ##  $ Sex_female: int [1:891] 0 1 1 1 0 0 0 0 1 1 ...
     ##  $ SibSp_1   : int [1:891] 1 1 0 1 0 0 0 0 0 1 ...
     ##  $ SibSp_2   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
@@ -1045,14 +1175,105 @@ train_x_fe <- train_x %>%
     ##  $ Parch_    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
     ##  $ Embarked_Q: int [1:891] 0 0 0 0 0 1 0 0 0 0 ...
     ##  $ Embarked_S: int [1:891] 1 0 1 1 1 0 1 1 1 0 ...
+    ##  $ Deck_B    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Deck_C    : int [1:891] 0 1 0 1 0 0 0 0 0 0 ...
+    ##  $ Deck_D    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Deck_E    : int [1:891] 0 0 0 0 0 0 1 0 0 0 ...
+    ##  $ Deck_F    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Deck_G    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Deck_M    : int [1:891] 1 0 1 0 1 1 0 1 1 1 ...
+    ##  $ Deck_T    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
 
-In our approach we will compare tree-based models and logistic
-regression. While the former are insensitive to distributions, logistic
-regression might perform better when features are scaled uniformly.
-There are still two numeric variables in the data: fare and age. Let us
-again look at their distributions.
+In our approach we will compare different classification techniques.
+While tree-based models are insensitive to distributions, distance-based
+models like k-nearest neighbors will perform better when features are
+scaled uniformly. There are still two numeric variables in the data:
+fare and age. Let us again look at their distributions.
 
-![](readme_files/figure-gfm/unnamed-chunk-68-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-75-1.png)<!-- -->
 
-The distribution of fare is right-skewed. We will transform it to log
-scale.
+``` r
+numeric_train <- train_x_fe %>% 
+  select(Age, Fare)%>% 
+  names()
+
+num_plots <- list()
+colors_num <- wes_palette("GrandBudapest1", length(numeric_train), type = "discrete")
+
+for (i in seq_along(numeric_train)) {
+  
+  var <- numeric_train[i]
+  
+  p <- train_x_fe %>% 
+    ggplot(aes_string(x = var)) +
+    geom_boxplot(fill = colors_num[[i]],
+                 outlier.colour = "red") +
+    labs(title = paste("Distribution of", var),
+       x = var) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  num_plots <- append(num_plots, list(p))
+}
+
+do.call(grid.arrange, c(num_plots, ncol = 2))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-76-1.png)<!-- --> We want to
+scale both age and fare to \[0, 1\] in order to have a uniform feature
+scaling. This is achieved by Min-Max scaling. However, Min-Max scaling
+is sensitive to outliers - of which we find many in fare. Therefore we
+will first apply log-transform in order to decrease the variance.
+
+``` r
+train_x_fe <- train_x_fe %>%
+  # log1p adds 1 to each value in order to avoid -Inf values after transformation
+  mutate(Fare = log1p(Fare),
+         Age = log1p(Age))
+```
+
+``` r
+preproc_scale <- preProcess(train_x_fe["Fare"], method = "range", rangeBounds = c(0, 1))
+data_quantile_scaled <- predict(preproc_scale, newdata = train_x_fe["Fare"])
+```
+
+``` r
+data_quantile_scaled %>% 
+  ggplot() +
+  geom_histogram(aes(x=Fare))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-79-1.png)<!-- -->
+
+``` r
+numeric_train <- train_x_fe %>% 
+  select(Age, Fare)%>% 
+  names()
+
+num_plots <- list()
+colors_num <- wes_palette("GrandBudapest1", length(numeric_train), type = "discrete")
+
+for (i in seq_along(numeric_train)) {
+  
+  var <- numeric_train[i]
+  
+  p <- train_x_fe %>% 
+    ggplot(aes_string(x = var)) +
+    geom_histogram(fill = colors_num[[i]],
+                   color = "black") +
+    labs(title = paste("Distribution of", var),
+       y = "Count",
+       x = var) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  num_plots <- append(num_plots, list(p))
+}
+
+do.call(grid.arrange, c(num_plots, ncol = 2))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-81-1.png)<!-- -->
+
+Next, we will apply min-max scaling to scale both variables to \[0, 1\].
+However, this transformation is sensitive to outliers.
