@@ -29,11 +29,15 @@ Set seed for reproducibility
 set.seed(1234)
 ```
 
+Set options.
+
 ``` r
 options(digits = 2,
         warn = -1,
         scipen = 999)
 ```
+
+Load data.
 
 ``` r
 train <- read_csv("./Data/train.csv", col_types = "nffcfnnncnf")
@@ -280,6 +284,8 @@ strings and first integers.
 train <- train %>%
   # transform values to numeric. if not possible, it will default to NA
   mutate(Numeric_ticket = !is.na(as.numeric(Ticket)),
+         # transform to lower case to merge identical entries with different capitalization
+         Ticket = tolower(Ticket),
          # create categorical values based on evaluation of numeric_ticket.
          Ticket_group = case_when(
            #  extract string if non-numeric
@@ -291,15 +297,6 @@ train <- train %>%
          )
 ```
 
-``` r
-train %>% 
-  count(Survived, Numeric_ticket, name = "Count") %>% 
-  group_by(Numeric_ticket) %>% 
-  mutate(Percentage = round(Count*100/sum(Count))) %>% 
-  arrange(Numeric_ticket) %>% 
-  kable()
-```
-
 | Survived | Numeric_ticket | Count | Percentage |
 |:---------|:---------------|------:|-----------:|
 | 0        | FALSE          |   142 |         62 |
@@ -309,16 +306,6 @@ train %>%
 
 There is no difference in survival rate between numerical and
 non-numerical tickets. We can further divide each class.
-
-``` r
-train %>% 
-  count(Survived, Ticket_group, name = "Count") %>% 
-  group_by(Ticket_group) %>% 
-  mutate(Percentage = round(Count*100/sum(Count))) %>%
-  # sort groups based on highest number of survivors
-  arrange(desc(Count * (Survived == 1)), .by_group = TRUE) %>% 
-  kable("simple")
-```
 
 | Survived | Ticket_group | Count | Percentage |
 |:---------|:-------------|------:|-----------:|
@@ -337,87 +324,69 @@ train %>%
 | 0        | 7            |     8 |         89 |
 | 0        | 8            |     2 |        100 |
 | 1        | 9            |     1 |        100 |
-| 0        | A/4          |     6 |        100 |
-| 1        | A/5          |     2 |         11 |
-| 0        | A/5          |    17 |         89 |
-| 0        | A/S          |     1 |        100 |
-| 0        | A4           |     1 |        100 |
-| 0        | A5           |     2 |        100 |
-| 1        | C            |     2 |         40 |
-| 0        | C            |     3 |         60 |
-| 1        | CA           |    14 |         34 |
-| 0        | CA           |    27 |         66 |
-| 0        | CA/SOTON     |     1 |        100 |
-| 0        | FC           |     1 |        100 |
-| 1        | FCC          |     4 |         80 |
-| 0        | FCC          |     1 |         20 |
-| 0        | Fa           |     1 |        100 |
-| 1        | LINE         |     1 |         25 |
-| 0        | LINE         |     3 |         75 |
-| 1        | P/PP         |     1 |         50 |
-| 0        | P/PP         |     1 |         50 |
-| 1        | PC           |    39 |         65 |
-| 0        | PC           |    21 |         35 |
-| 1        | PP           |     2 |         67 |
-| 0        | PP           |     1 |         33 |
-| 1        | SC           |     1 |        100 |
-| 0        | SC/A4        |     1 |        100 |
-| 1        | SC/AH        |     2 |         67 |
-| 0        | SC/AH        |     1 |         33 |
-| 1        | SC/PARIS     |     3 |         43 |
-| 0        | SC/PARIS     |     4 |         57 |
-| 1        | SC/Paris     |     2 |         50 |
-| 0        | SC/Paris     |     2 |         50 |
-| 0        | SCO/W        |     1 |        100 |
-| 1        | SO/C         |     1 |        100 |
-| 0        | SO/PP        |     3 |        100 |
-| 0        | SOC          |     5 |        100 |
-| 0        | SOP          |     1 |        100 |
-| 0        | SOTON/O2     |     2 |        100 |
-| 1        | SOTON/OQ     |     2 |         13 |
-| 0        | SOTON/OQ     |    13 |         87 |
-| 0        | SP           |     1 |        100 |
-| 1        | STON/O       |     5 |         42 |
-| 0        | STON/O       |     7 |         58 |
-| 1        | STON/O2      |     3 |         50 |
-| 0        | STON/O2      |     3 |         50 |
-| 1        | SW/PP        |     2 |        100 |
-| 1        | W/C          |     1 |         10 |
-| 0        | W/C          |     9 |         90 |
-| 1        | WE/P         |     1 |         50 |
-| 0        | WE/P         |     1 |         50 |
-| 0        | WEP          |     1 |        100 |
+| 0        | a/4          |     6 |        100 |
+| 1        | a/5          |     2 |         11 |
+| 0        | a/5          |    17 |         89 |
+| 0        | a/s          |     1 |        100 |
+| 0        | a4           |     1 |        100 |
+| 0        | a5           |     2 |        100 |
+| 1        | c            |     2 |         40 |
+| 0        | c            |     3 |         60 |
+| 1        | ca           |    14 |         34 |
+| 0        | ca           |    27 |         66 |
+| 0        | ca/soton     |     1 |        100 |
+| 0        | fa           |     1 |        100 |
+| 0        | fc           |     1 |        100 |
+| 1        | fcc          |     4 |         80 |
+| 0        | fcc          |     1 |         20 |
+| 1        | line         |     1 |         25 |
+| 0        | line         |     3 |         75 |
+| 1        | p/pp         |     1 |         50 |
+| 0        | p/pp         |     1 |         50 |
+| 1        | pc           |    39 |         65 |
+| 0        | pc           |    21 |         35 |
+| 1        | pp           |     2 |         67 |
+| 0        | pp           |     1 |         33 |
+| 1        | sc           |     1 |        100 |
+| 0        | sc/a4        |     1 |        100 |
+| 1        | sc/ah        |     2 |         67 |
+| 0        | sc/ah        |     1 |         33 |
+| 1        | sc/paris     |     5 |         45 |
+| 0        | sc/paris     |     6 |         55 |
+| 0        | sco/w        |     1 |        100 |
+| 1        | so/c         |     1 |        100 |
+| 0        | so/pp        |     3 |        100 |
+| 0        | soc          |     5 |        100 |
+| 0        | sop          |     1 |        100 |
+| 0        | soton/o2     |     2 |        100 |
+| 1        | soton/oq     |     2 |         13 |
+| 0        | soton/oq     |    13 |         87 |
+| 0        | sp           |     1 |        100 |
+| 1        | ston/o       |     5 |         42 |
+| 0        | ston/o       |     7 |         58 |
+| 1        | ston/o2      |     3 |         50 |
+| 0        | ston/o2      |     3 |         50 |
+| 1        | sw/pp        |     2 |        100 |
+| 1        | w/c          |     1 |         10 |
+| 0        | w/c          |     9 |         90 |
+| 1        | we/p         |     1 |         50 |
+| 0        | we/p         |     1 |         50 |
+| 0        | wep          |     1 |        100 |
 
 There are too many groups to infer any meaningful pattern. Some groups
-could probably be merged: SC/paris and SC/PARIS are an obvious choice
-but others, like WEP and WE/P might be the result of ambiguous
-annotation.
+could probably be merged but without any detailed information we can
+only speculate whether “a/5” and “a5” are the same.
 
-At last, we will try to infer information of the passenger group size
-from the ticket to capture relationships other than family.
+From “ticket” we can create a new variable “sharing_ticket”, which
+indicates how many passengers shared the same ticket.
 
 ``` r
-train %>% 
+train <- train %>% 
   mutate(Fam_size = SibSp + Parch) %>%
-  count(Fam_size, Ticket, name = "Count") %>% 
-  ungroup() %>% 
-  count(Fam_size, Count)
+  group_by(Fam_size, Ticket) %>% 
+  mutate(Sharing_ticket = n()) %>% 
+  ungroup()
 ```
-
-    ## # A tibble: 26 × 3
-    ##    Fam_size Count     n
-    ##       <int> <int> <int>
-    ##  1        0     1   478
-    ##  2        0     2    18
-    ##  3        0     3     4
-    ##  4        0     4     1
-    ##  5        0     7     1
-    ##  6        1     1    71
-    ##  7        1     2    45
-    ##  8        2     1    31
-    ##  9        2     2    22
-    ## 10        2     3     9
-    ## # ℹ 16 more rows
 
 ### Cabin
 
@@ -454,45 +423,70 @@ train <- train %>%
          Deck = replace_na(Deck, "M"))
 ```
 
-Let us look at the distributions of survivora and passenger class across
+Let us look at the distributions of survivors and passenger class across
 decks.
 
 ![](readme_files/figure-gfm/Deck%20Survived-1.png)<!-- -->
 
-![](readme_files/figure-gfm/Deck%20PClass-1.png)<!-- --> Strinkingly,
-the T deck is populated exclusively by 1st class-passengers, oh whom all
-did not survive. This may be indicative of spatial and not class-based
-relation to survival.
+Let us investigate how the individual classes are distributed across the
+different decks.
+![](readme_files/figure-gfm/Deck%20PClass-1.png)<!-- --> Given the
+distinct class distributions we can calculate the average fare per
+passenger. Our new sharing_ticket variable will come in handy here.
 
 ``` r
-train %>% 
-  filter(Deck == "M") %>% 
-  count(Pclass, Survived) %>% 
-  mutate(Survived = case_match(Survived,
-                              "0" ~ "deceased",
-                              "1" ~ "survived")) %>% 
-  ggplot(aes(x = Pclass,
-             y = n,
-           fill = Survived)) +
-  geom_bar(stat="identity",
-           width = 0.4,
-           position = position_dodge(width = 0.6)) +
-  labs(title = "Passenger class and survivors among missing cabin values",
-       y = "Passengers",
-       x = "Class",
-       fill = "Survival status") +
-  theme_minimal() +
-  scale_fill_manual(values = wes_palette("GrandBudapest1"))
+train <- train %>% 
+  mutate(Fare_pp = round(Fare/Sharing_ticket)) %>% 
+  group_by(Deck) %>%
+  mutate(Avg_fare_pp = mean(Fare_pp, na.rm = TRUE)) %>% 
+  ungroup()
 ```
 
 ![](readme_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+
+We will merge decks with similar class distributions.
+
+``` r
+train <- train %>% 
+  mutate(Deck = case_when(
+    Deck %in% c("A", "B", "C", "T") ~ "A",
+    Deck %in% c("D", "E") ~ "D",
+    .default = Deck
+  ))
+```
+
+![](readme_files/figure-gfm/Decks%20grouped-1.png)<!-- -->
+
+![](readme_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
+
+``` r
+train %>% 
+  group_by(Deck) %>%
+  summarise(Mean_ticket_size = mean(Sharing_ticket),
+            .groups = "drop") %>%
+  ggplot(aes(x = Deck, 
+             y = Mean_ticket_size, 
+             fill = Deck)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average number of passengers sharing one ticket",
+       y = "Group size",
+       x = "Deck") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = wes_palette("GrandBudapest1", 5, type = "continuous"))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-37-1.png)<!-- --> Apparently,
+there is also no relationship between the deck and the cabin size.
+
+![](readme_files/figure-gfm/unnamed-chunk-38-1.png)<!-- -->
 
 ### EDA summary
 
 Sex and passenger class are highly correlated with survival.
 
 The cabin variable has too many missing values and thus will be removed.
-The porportion of missing values in the variables “Embarked”, “Fare” and
+The proportion of missing values in the variables “Embarked”, “Fare” and
 “Age” is low enough to impute them.
 
 Passenger ID and Ticket can also be dropped as they hold no predictive
@@ -500,31 +494,11 @@ value.
 
 ## Feature engineering
 
-We will - Remove unnecessary variables - Combine Parch and SibSp into a
-single variable “family size” - Encode categorical features - Imputed
-missing values in - Embarked - Age - Fare
+We will - Imputed missing values in - Embarked - Age - Fare - Remove
+unnecessary variables - Encode categorical features - Transform and
+scale numeric features
 
-### Family variable
-
-``` r
-train %>% 
-  mutate(Family_size = Parch + SibSp) %>% 
-  count(Family_size) %>% 
-  ggplot(
-    aes(x = factor(Family_size),
-        y = n),
-    fill = Family_size) +
-  geom_bar(stat = "identity") +
-  labs(title = "Passenger traveling with family",
-       y = "Count",
-       x = "Family size") +
-  # facet_grid(~Pclass) + 
-  theme_minimal() +
-  scale_fill_manual(values = wes_palette("GrandBudapest1", 9, type = "continuous"))
-```
-
-![](readme_files/figure-gfm/unnamed-chunk-35-1.png)<!-- --> \### Remove
-columns
+### Remove columns
 
 ``` r
 train_cln <- train %>% select(!c(Cabin, Ticket, Ticket_group, Numeric_ticket, PassengerId))
@@ -538,6 +512,7 @@ Let us take a quick look at the variables with missing values.
 |:---------|--------:|
 | Age      |     177 |
 | Fare     |      15 |
+| Fare_pp  |      15 |
 | Embarked |       2 |
 
 #### Embarked
@@ -597,7 +572,7 @@ For the imputation of fare we can look again at the correlation matrix.
 Passenger class and fare show the greatest correlation across all
 variables.
 
-![](readme_files/figure-gfm/unnamed-chunk-42-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-45-1.png)<!-- -->
 
 ``` r
 train_imputed %>% 
@@ -619,7 +594,7 @@ above we see few but significant outliers. Fare is also correlated with
 passenger family size. Let us look at the fares across different family
 sizes in each passenger class.
 
-![](readme_files/figure-gfm/unnamed-chunk-44-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-47-1.png)<!-- -->
 
 ``` r
 train_imputed %>% 
@@ -637,7 +612,7 @@ train_imputed %>%
   scale_fill_manual(values = wes_palette("GrandBudapest1", 8, type = "continuous"))
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-45-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-48-1.png)<!-- -->
 
 We see that fares increase with family size, independent of passenger
 class. Since Parch and SibSp are correlated with each other we will
@@ -697,9 +672,7 @@ how we want to impute.
     ## 15 3          6        46       46    NA        1
 
 Due to the large standard deviation in class 1 we choose the median for
-imputation of fares.
-
-Again we will create a function for the imputation.
+imputation of fares. Again we will create a function for the imputation.
 
 ``` r
 impute_fare <- function(df, na.rm = FALSE){
@@ -736,7 +709,7 @@ Check missing values before and after imputation.
 train_imputed <- impute_fare(train_imputed)
 ```
 
-#### Age imputation
+#### Age
 
 For the imputation of age, we will extract the titles from inside the
 name column. Then we will create title groups and calculate the mean and
@@ -867,14 +840,14 @@ train_with_titles <- aggregate_titles(train_with_titles)
 | Mr     |   540 | 33.0 |   30.0 | 13.0 |
 | Mrs    |   128 | 35.9 |   35.0 | 11.4 |
 
-![](readme_files/figure-gfm/unnamed-chunk-58-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-61-1.png)<!-- -->
 
-![](readme_files/figure-gfm/unnamed-chunk-59-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-62-1.png)<!-- -->
 
 Since the title “Miss” is used for unmarried women, we will split the
 “miss” group based on whether they were traveling with Parents and/or
 children - assuming that those without are older.  
-![](readme_files/figure-gfm/unnamed-chunk-60-1.png)<!-- --> Our
+![](readme_files/figure-gfm/unnamed-chunk-63-1.png)<!-- --> Our
 assumption turns out to be true so we will consider it within our
 imputation function. The same assumption seems to be true for young men
 (“Master”) but with just one observation there is not enough data to
@@ -935,7 +908,7 @@ Again we will compare the number of missing values before
 | Mr     |     120 |
 | Mrs    |      17 |
 
-and after imputation
+…and after imputation
 
 | Title    | Missing |
 |:---------|--------:|
@@ -947,17 +920,6 @@ and after imputation
 Let us compare the mean and standard deviation of the original age
 values
 
-``` r
-train_with_titles %>% 
-  filter(!is.na(Age)) %>%
-  mutate(Title = ifelse(Title == "Miss" & "Parch" > 0, "Miss_fam", Title)) %>% 
-  group_by(Title) %>% 
-    summarise(Count = n(),
-      Mean = round(mean(Age, na.rm = TRUE), 1),
-      SD   = round(sd(Age, na.rm = TRUE), 1)) %>% 
-  kable("simple")
-```
-
 | Title    | Count | Mean |   SD |
 |:---------|------:|-----:|-----:|
 | Master   |    36 |  4.5 |  3.7 |
@@ -965,17 +927,7 @@ train_with_titles %>%
 | Mr       |   420 | 33.0 | 13.0 |
 | Mrs      |   111 | 35.9 | 11.4 |
 
-with the imputed values
-
-``` r
-impute_age(train_with_titles) %>% 
-  group_by(Title) %>% 
-    summarise(Count = n(),
-      Mean = round(mean(Age, na.rm = TRUE), 1),
-      SD   = round(sd(Age, na.rm = TRUE), 1),
-      .groups = "drop") %>% 
-  kable("simple")
-```
+…with the imputed values
 
 | Title    | Count | Mean |   SD |
 |:---------|------:|-----:|-----:|
@@ -985,39 +937,183 @@ impute_age(train_with_titles) %>%
 | Mrs      |   128 | 35.9 | 10.9 |
 
 We can also compare the densities of Age before and after imputation.
+![](readme_files/figure-gfm/unnamed-chunk-69-1.png)<!-- -->
+
+![](readme_files/figure-gfm/unnamed-chunk-70-1.png)<!-- -->
 
 ``` r
-train_with_titles %>% 
-  filter(!is.na(Age)) %>% 
-  ggplot() +
-  geom_density(aes(x = Age))
-```
-
-![](readme_files/figure-gfm/unnamed-chunk-66-1.png)<!-- -->
-
-``` r
-impute_age(train_with_titles) %>% 
-  ggplot() +
-  geom_density(aes(x = Age))
-```
-
-![](readme_files/figure-gfm/unnamed-chunk-67-1.png)<!-- -->
-
-``` r
-train_complete <- impute_age(train_with_titles) %>% 
+train_imputed <- impute_age(train_with_titles) %>% 
   select(-Title)
 ```
 
-    ## tibble [891 × 9] (S3: tbl_df/tbl/data.frame)
-    ##  $ Survived: Factor w/ 2 levels "0","1": 1 2 2 2 1 1 1 1 2 2 ...
-    ##  $ Pclass  : Factor w/ 3 levels "1","2","3": 3 1 3 1 3 3 1 3 3 2 ...
-    ##  $ Sex     : Factor w/ 2 levels "male","female": 1 2 2 2 1 1 1 1 2 2 ...
-    ##  $ Age     : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
-    ##  $ SibSp   : int [1:891] 1 1 0 1 0 0 0 3 0 1 ...
-    ##  $ Parch   : int [1:891] 0 0 0 0 0 0 0 1 2 0 ...
-    ##  $ Fare    : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
-    ##  $ Embarked: chr [1:891] "S" "C" "S" "S" ...
-    ##  $ Deck    : chr [1:891] "M" "C" "M" "C" ...
+### Feature encoding and scaling
+
+In this section we will encode categorical variables. We will use the
+fastDummies package to make quick work of encoding all character and
+factor columns. Also, we remove the first dummy column to avoid
+multicollinearity issues down the line.
+
+``` r
+train_fe <- train_imputed %>% 
+  mutate(SibSp = as.factor(SibSp),
+         Parch = as.factor(Parch)) %>% 
+  fastDummies::dummy_columns(remove_first_dummy = TRUE,
+                             remove_selected_columns = TRUE)
+```
+
+    ## tibble [891 × 28] (S3: tbl_df/tbl/data.frame)
+    ##  $ Age           : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
+    ##  $ Fare          : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
+    ##  $ Fam_size      : int [1:891] 1 1 0 1 0 0 0 4 2 1 ...
+    ##  $ Sharing_ticket: int [1:891] 1 1 1 2 1 1 1 4 3 2 ...
+    ##  $ Fare_pp       : num [1:891] 7 71 7 26 8 8 51 5 4 15 ...
+    ##  $ Avg_fare_pp   : num [1:891] 12.3 58.3 12.3 58.3 12.3 ...
+    ##  $ Survived_1    : int [1:891] 0 1 1 1 0 0 0 0 1 1 ...
+    ##  $ Pclass_2      : int [1:891] 0 0 0 0 0 0 0 0 0 1 ...
+    ##  $ Pclass_3      : int [1:891] 1 0 1 0 1 1 0 1 1 0 ...
+    ##  $ Sex_female    : int [1:891] 0 1 1 1 0 0 0 0 1 1 ...
+    ##  $ SibSp_1       : int [1:891] 1 1 0 1 0 0 0 0 0 1 ...
+    ##  $ SibSp_2       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ SibSp_3       : int [1:891] 0 0 0 0 0 0 0 1 0 0 ...
+    ##  $ SibSp_4       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ SibSp_5       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ SibSp_8       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Parch_1       : int [1:891] 0 0 0 0 0 0 0 1 0 0 ...
+    ##  $ Parch_2       : int [1:891] 0 0 0 0 0 0 0 0 1 0 ...
+    ##  $ Parch_3       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Parch_4       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Parch_5       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Parch_6       : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Embarked_Q    : int [1:891] 0 0 0 0 0 1 0 0 0 0 ...
+    ##  $ Embarked_S    : int [1:891] 1 0 1 1 1 0 1 1 1 0 ...
+    ##  $ Deck_D        : int [1:891] 0 0 0 0 0 0 1 0 0 0 ...
+    ##  $ Deck_F        : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Deck_G        : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
+    ##  $ Deck_M        : int [1:891] 1 0 1 0 1 1 0 1 1 1 ...
+
+In our approach we will compare different classification techniques.
+While tree-based models are insensitive to different feature scales and
+outliers, distance-based models like k-nearest neighbors will perform
+better when features are scaled uniformly. There are still two numeric
+variables in the data: fare and age. Let us again look at their
+distributions.
+
+![](readme_files/figure-gfm/unnamed-chunk-74-1.png)<!-- -->
+
+``` r
+numeric_train <- train_fe %>% 
+  select(Age, Fare)%>% 
+  names()
+
+num_plots <- list()
+colors_num <- wes_palette("GrandBudapest1", length(numeric_train), type = "discrete")
+
+for (i in seq_along(numeric_train)) {
+  
+  var <- numeric_train[i]
+  
+  p <- train_fe %>% 
+    ggplot(aes_string(x = var)) +
+    geom_boxplot(fill = colors_num[[i]],
+                 outlier.colour =  wes_palette("GrandBudapest1")[3]) +
+    labs(title = paste("Boxplot of", var),
+       x = var) +
+    theme_minimal() +
+    theme(axis.text.y = element_blank()) +
+    theme(legend.position = "none")
+  
+  num_plots <- append(num_plots, list(p))
+}
+
+do.call(grid.arrange, c(num_plots, ncol = 2))
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-75-1.png)<!-- --> We want to
+scale both age and fare to \[0, 1\] in order to have a uniform feature
+scaling. This is achieved by Min-Max scaling. However, Min-Max scaling
+is sensitive to outliers - of which we find many in fare. Therefore we
+will first apply log-transform in order to decrease the variance.
+
+``` r
+train_fe <- train_fe %>%
+  # log1p adds 1 to each value in order to avoid -Inf values after transformation
+  mutate(Fare = log1p(Fare))
+```
+
+Now we will scale both variables to \[0, 1\].
+
+``` r
+preproc_scale <- preProcess(train_fe[, c("Fare", "Age")], method = "range", rangeBounds = c(0, 1))
+data_scaled <- predict(preproc_scale, newdata = train_fe[, c("Fare", "Age")])
+```
+
+``` r
+data_scaled %>% 
+  ggplot() +
+  geom_histogram(aes(x=Fare),
+                 fill = wes_palette("GrandBudapest1")[2],
+                 color = "black") +
+  labs(title = "Distribution of fare after log-transformation and scaling",
+       y = "Count",
+       x = "Fare") +
+  theme_minimal()
+```
+
+![](readme_files/figure-gfm/unnamed-chunk-78-1.png)<!-- --> Fare is now
+distributed across the whole interval.
+
+``` r
+summary(train_fe)
+```
+
+    ##       Age          Fare        Fam_size    Sharing_ticket    Fare_pp   
+    ##  Min.   : 0   Min.   :1.6   Min.   : 0.0   Min.   :1.0    Min.   :  4  
+    ##  1st Qu.:21   1st Qu.:2.1   1st Qu.: 0.0   1st Qu.:1.0    1st Qu.:  7  
+    ##  Median :29   Median :2.7   Median : 0.0   Median :1.0    Median :  9  
+    ##  Mean   :30   Mean   :3.0   Mean   : 0.9   Mean   :1.7    Mean   : 21  
+    ##  3rd Qu.:38   3rd Qu.:3.5   3rd Qu.: 1.0   3rd Qu.:2.0    3rd Qu.: 26  
+    ##  Max.   :80   Max.   :6.2   Max.   :10.0   Max.   :7.0    Max.   :512  
+    ##                                                           NA's   :15   
+    ##   Avg_fare_pp   Survived_1      Pclass_2       Pclass_3      Sex_female  
+    ##  Min.   : 9   Min.   :0.00   Min.   :0.00   Min.   :0.00   Min.   :0.00  
+    ##  1st Qu.:12   1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00  
+    ##  Median :12   Median :0.00   Median :0.00   Median :1.00   Median :0.00  
+    ##  Mean   :21   Mean   :0.38   Mean   :0.21   Mean   :0.55   Mean   :0.35  
+    ##  3rd Qu.:12   3rd Qu.:1.00   3rd Qu.:0.00   3rd Qu.:1.00   3rd Qu.:1.00  
+    ##  Max.   :74   Max.   :1.00   Max.   :1.00   Max.   :1.00   Max.   :1.00  
+    ##                                                                          
+    ##     SibSp_1        SibSp_2        SibSp_3        SibSp_4        SibSp_5    
+    ##  Min.   :0.00   Min.   :0.00   Min.   :0.00   Min.   :0.00   Min.   :0.00  
+    ##  1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00  
+    ##  Median :0.00   Median :0.00   Median :0.00   Median :0.00   Median :0.00  
+    ##  Mean   :0.23   Mean   :0.03   Mean   :0.02   Mean   :0.02   Mean   :0.01  
+    ##  3rd Qu.:0.00   3rd Qu.:0.00   3rd Qu.:0.00   3rd Qu.:0.00   3rd Qu.:0.00  
+    ##  Max.   :1.00   Max.   :1.00   Max.   :1.00   Max.   :1.00   Max.   :1.00  
+    ##                                                                            
+    ##     SibSp_8        Parch_1        Parch_2        Parch_3        Parch_4 
+    ##  Min.   :0.00   Min.   :0.00   Min.   :0.00   Min.   :0.00   Min.   :0  
+    ##  1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0  
+    ##  Median :0.00   Median :0.00   Median :0.00   Median :0.00   Median :0  
+    ##  Mean   :0.01   Mean   :0.13   Mean   :0.09   Mean   :0.01   Mean   :0  
+    ##  3rd Qu.:0.00   3rd Qu.:0.00   3rd Qu.:0.00   3rd Qu.:0.00   3rd Qu.:0  
+    ##  Max.   :1.00   Max.   :1.00   Max.   :1.00   Max.   :1.00   Max.   :1  
+    ##                                                                         
+    ##     Parch_5        Parch_6    Embarked_Q     Embarked_S       Deck_D    
+    ##  Min.   :0.00   Min.   :0   Min.   :0.00   Min.   :0.00   Min.   :0.00  
+    ##  1st Qu.:0.00   1st Qu.:0   1st Qu.:0.00   1st Qu.:0.00   1st Qu.:0.00  
+    ##  Median :0.00   Median :0   Median :0.00   Median :1.00   Median :0.00  
+    ##  Mean   :0.01   Mean   :0   Mean   :0.09   Mean   :0.73   Mean   :0.07  
+    ##  3rd Qu.:0.00   3rd Qu.:0   3rd Qu.:0.00   3rd Qu.:1.00   3rd Qu.:0.00  
+    ##  Max.   :1.00   Max.   :1   Max.   :1.00   Max.   :1.00   Max.   :1.00  
+    ##                                                                         
+    ##      Deck_F         Deck_G      Deck_M    
+    ##  Min.   :0.00   Min.   :0   Min.   :0.00  
+    ##  1st Qu.:0.00   1st Qu.:0   1st Qu.:1.00  
+    ##  Median :0.00   Median :0   Median :1.00  
+    ##  Mean   :0.01   Mean   :0   Mean   :0.77  
+    ##  3rd Qu.:0.00   3rd Qu.:0   3rd Qu.:1.00  
+    ##  Max.   :1.00   Max.   :1   Max.   :1.00  
+    ## 
 
 For ease of application we will implement all of the steps outlined
 above into a handy function for data clean up and imputation.
@@ -1122,158 +1218,7 @@ clean_and_impute <- function(df, na.rm = FALSE){
 }
 ```
 
-## Feature engineering
+## Modeling
 
-First, we will separate our target variable from the predictor
+For the modeling part we separate our target variable from the predictor
 variables.
-
-``` r
-train_y <- train_complete$Survived
-train_x <- train_complete %>% select(-Survived)
-```
-
-``` r
-str(train_x)
-```
-
-    ## tibble [891 × 8] (S3: tbl_df/tbl/data.frame)
-    ##  $ Pclass  : Factor w/ 3 levels "1","2","3": 3 1 3 1 3 3 1 3 3 2 ...
-    ##  $ Sex     : Factor w/ 2 levels "male","female": 1 2 2 2 1 1 1 1 2 2 ...
-    ##  $ Age     : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
-    ##  $ SibSp   : int [1:891] 1 1 0 1 0 0 0 3 0 1 ...
-    ##  $ Parch   : int [1:891] 0 0 0 0 0 0 0 1 2 0 ...
-    ##  $ Fare    : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
-    ##  $ Embarked: chr [1:891] "S" "C" "S" "S" ...
-    ##  $ Deck    : chr [1:891] "M" "C" "M" "C" ...
-
-In this section we will encode categorical variables and look for
-correlated variables to remove. We will use the fastDummies package to
-make quick work of encoding all character and factor columns. Also we
-remove the first dummy column to avoid multicollinearity issues down the
-line.
-
-``` r
-train_x_fe <- train_x %>% 
-  mutate(SibSp = as.factor(SibSp),
-         "Parch" = as.factor("Parch")) %>% 
-  fastDummies::dummy_columns(remove_first_dummy = TRUE,
-                             remove_selected_columns = TRUE)
-```
-
-    ## tibble [891 × 22] (S3: tbl_df/tbl/data.frame)
-    ##  $ Age       : num [1:891] 22 38 26 35 35 37 54 2 27 14 ...
-    ##  $ Fare      : num [1:891] 7 71 7 53 8 8 51 21 11 30 ...
-    ##  $ Pclass_2  : int [1:891] 0 0 0 0 0 0 0 0 0 1 ...
-    ##  $ Pclass_3  : int [1:891] 1 0 1 0 1 1 0 1 1 0 ...
-    ##  $ Sex_female: int [1:891] 0 1 1 1 0 0 0 0 1 1 ...
-    ##  $ SibSp_1   : int [1:891] 1 1 0 1 0 0 0 0 0 1 ...
-    ##  $ SibSp_2   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ SibSp_3   : int [1:891] 0 0 0 0 0 0 0 1 0 0 ...
-    ##  $ SibSp_4   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ SibSp_5   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ SibSp_8   : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Parch_    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Embarked_Q: int [1:891] 0 0 0 0 0 1 0 0 0 0 ...
-    ##  $ Embarked_S: int [1:891] 1 0 1 1 1 0 1 1 1 0 ...
-    ##  $ Deck_B    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Deck_C    : int [1:891] 0 1 0 1 0 0 0 0 0 0 ...
-    ##  $ Deck_D    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Deck_E    : int [1:891] 0 0 0 0 0 0 1 0 0 0 ...
-    ##  $ Deck_F    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Deck_G    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ Deck_M    : int [1:891] 1 0 1 0 1 1 0 1 1 1 ...
-    ##  $ Deck_T    : int [1:891] 0 0 0 0 0 0 0 0 0 0 ...
-
-In our approach we will compare different classification techniques.
-While tree-based models are insensitive to distributions, distance-based
-models like k-nearest neighbors will perform better when features are
-scaled uniformly. There are still two numeric variables in the data:
-fare and age. Let us again look at their distributions.
-
-![](readme_files/figure-gfm/unnamed-chunk-75-1.png)<!-- -->
-
-``` r
-numeric_train <- train_x_fe %>% 
-  select(Age, Fare)%>% 
-  names()
-
-num_plots <- list()
-colors_num <- wes_palette("GrandBudapest1", length(numeric_train), type = "discrete")
-
-for (i in seq_along(numeric_train)) {
-  
-  var <- numeric_train[i]
-  
-  p <- train_x_fe %>% 
-    ggplot(aes_string(x = var)) +
-    geom_boxplot(fill = colors_num[[i]],
-                 outlier.colour = "red") +
-    labs(title = paste("Distribution of", var),
-       x = var) +
-    theme_minimal() +
-    theme(legend.position = "none")
-  
-  num_plots <- append(num_plots, list(p))
-}
-
-do.call(grid.arrange, c(num_plots, ncol = 2))
-```
-
-![](readme_files/figure-gfm/unnamed-chunk-76-1.png)<!-- --> We want to
-scale both age and fare to \[0, 1\] in order to have a uniform feature
-scaling. This is achieved by Min-Max scaling. However, Min-Max scaling
-is sensitive to outliers - of which we find many in fare. Therefore we
-will first apply log-transform in order to decrease the variance.
-
-``` r
-train_x_fe <- train_x_fe %>%
-  # log1p adds 1 to each value in order to avoid -Inf values after transformation
-  mutate(Fare = log1p(Fare),
-         Age = log1p(Age))
-```
-
-``` r
-preproc_scale <- preProcess(train_x_fe["Fare"], method = "range", rangeBounds = c(0, 1))
-data_quantile_scaled <- predict(preproc_scale, newdata = train_x_fe["Fare"])
-```
-
-``` r
-data_quantile_scaled %>% 
-  ggplot() +
-  geom_histogram(aes(x=Fare))
-```
-
-![](readme_files/figure-gfm/unnamed-chunk-79-1.png)<!-- -->
-
-``` r
-numeric_train <- train_x_fe %>% 
-  select(Age, Fare)%>% 
-  names()
-
-num_plots <- list()
-colors_num <- wes_palette("GrandBudapest1", length(numeric_train), type = "discrete")
-
-for (i in seq_along(numeric_train)) {
-  
-  var <- numeric_train[i]
-  
-  p <- train_x_fe %>% 
-    ggplot(aes_string(x = var)) +
-    geom_histogram(fill = colors_num[[i]],
-                   color = "black") +
-    labs(title = paste("Distribution of", var),
-       y = "Count",
-       x = var) +
-    theme_minimal() +
-    theme(legend.position = "none")
-  
-  num_plots <- append(num_plots, list(p))
-}
-
-do.call(grid.arrange, c(num_plots, ncol = 2))
-```
-
-![](readme_files/figure-gfm/unnamed-chunk-81-1.png)<!-- -->
-
-Next, we will apply min-max scaling to scale both variables to \[0, 1\].
-However, this transformation is sensitive to outliers.
