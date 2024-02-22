@@ -1,0 +1,1277 @@
+---
+title: "Titanic"
+author: "Michal Rackiewicz"
+date: "2023-09-29"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load packages and data
+
+```{r load packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(RColorBrewer)
+library(viridis)
+library(Hmisc)
+library(corrplot)
+library(ggpol)
+library(gridExtra)
+library(rlang)
+library(knitr)
+library(scales)
+```
+
+Set options
+```{r}
+options(digits = 2,
+        # do not show warning messages
+        warn = -1,
+        # do not user scientific number formatting
+        scipen = 999)
+```
+
+Load data
+```{r load titanic data, warning=FALSE}
+train <- read_csv("./Data/train.csv", col_types = "nffcfnffcnfc")
+test <- read_csv("./Data/test.csv", col_types = "nffcfnffcnfc")
+```
+
+## Exploratory data analysis
+
+```{r}
+str(train)
+```
+
+```{r summary_stats}
+skimr::skim(train)
+```
+
+Let us also check the distribution of the dependent variable. By doing this we get an idea of how balanced the data set is and whether we have to do something to balance groups before modeling.
+
+```{r class_balance}
+train %>% 
+  select(Survived) %>% 
+  group_by(Survived) %>% 
+  summarise(Count = n()) %>% 
+  mutate(Freq = paste0(round(100 * Count/sum(Count), 1), "%")) 
+```
+
+```{r echo=TRUE}
+train <- train %>%
+  # encode blank entries and spaces
+  mutate(
+    across(
+      everything(),
+      ~if_else(. %in% c("", " "), NA, .)
+    ),
+    # encode 0 values in fare
+    Fare = if_else(Fare == 0, NA, Fare)
+  )
+```
+
+```{r}
+train %>% 
+  summarise_all(list( ~sum(is.na(.)))) %>% 
+  pivot_longer(cols = everything(), 
+               names_to = "Variable", 
+               values_to = "Missing") %>% 
+  arrange(desc(Missing)) %>% 
+  mutate(n = 891,
+         Proportion_missing = paste0(round(Missing*100/n, 1), "%")) %>% 
+  select(!n)
+```
+
+```{r include=FALSE}
+train <- train %>% 
+  mutate(across(c(PassengerId, Age, SibSp, Parch, Fare), as.integer),
+         across(c(Survived, Pclass, Embarked, Sex), as.factor))
+```
+
+```{r include=FALSE}
+train$Pclass <- factor(train$Pclass, levels = c(1, 2, 3))
+```
+
+Divide the variables into numeric and categorical and visualize each group.
+```{r}
+numeric_vars <- train %>% 
+  select(where(is.numeric)) %>% 
+  names()
+
+categorical_vars <- train %>% 
+  select(Survived, Pclass, Sex, Embarked, SibSp, Parch) %>% 
+  names()
+```
+
+### Numeric variables
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+numeric_plots <- list()
+
+
+for (i in seq_along(numeric_vars)) {
+  
+  var <- numeric_vars[i]
+  
+  p <- train %>% 
+    filter(!is.na(!!rlang::sym(var))) %>% 
+    ggplot(aes_string(x = var)) +
+    geom_histogram(color = "white") +
+    labs(title = paste("Distribution of", var),
+       y = "Count",
+       x = var) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  numeric_plots <- append(numeric_plots, list(p))
+}
+
+do.call(grid.arrange, c(numeric_plots, ncol = 2))
+```
+
+####total numbers of passengers travelling with their families.
+```{r echo=FALSE, paged.print=FALSE}
+train %>% 
+  count(SibSp, name = "Count") %>% 
+  kable("simple")
+```
+
+```{r echo=FALSE, paged.print=FALSE}
+train %>% 
+  count(Parch, name = "Count") %>% 
+  kable("simple")
+```
+
+### Categorical variables
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+categorical_plots <- list()
+
+for (i in seq_along(categorical_vars)) {
+  
+  var <- categorical_vars[i]
+  var_levels <- length(unique(train[[var]]))
+  # colors_cat <- 
+  
+  p <- train %>% 
+    filter(!is.na(!!rlang::sym(var))) %>% 
+    ggplot(aes_string(x = var,
+                       fill = var)) +
+    geom_bar() +
+    labs(title = paste("Distribution of", var),
+       y = "Count",
+       x = var) +
+    theme_minimal() +
+    scale_fill_brewer(palette = "Dark2", type = "qual") +
+    theme(legend.position = "none")
+  
+  categorical_plots <- append(categorical_plots, list(p))
+}
+
+do.call(grid.arrange, c(categorical_plots, ncol = 2))
+```
+
+### Correlation map
+```{r include=FALSE}
+correlation_matrix <- train %>%
+  mutate(across(where(is.factor), as.numeric),
+         Survived =  as.integer(Survived)) %>%
+  select(where(is.numeric)) %>%
+  filter(complete.cases(.)) %>% 
+  cor(as.matrix(.), method = "spearman")
+```
+
+```{r, echo=FALSE}
+corrplot(correlation_matrix, 
+         method = "square",
+         type = "lower",
+         order = "alphabet",
+         addCoef.col = 'black',
+         diag = FALSE)
+```
+
+### Passenger ID
+
+PassengerID shows no correlations with any other variable. It is evenly distributed across passenger class and sex - the two strongest correlations with the target variable.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+train %>% 
+  mutate(Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  ggplot(aes(x = PassengerId)) +
+  geom_histogram(aes(fill = Survived,
+                     bin = 50),
+                 color = "black") +
+  labs(title = "Distribution of passenger IDs",
+     y = "Count",
+     x = "Passenger ID",
+     fill = "Survived") +
+  facet_grid(Sex ~ .) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2", type = "qual")
+```
+
+```{r, echo=FALSE}
+train %>% 
+  ggplot(aes(y = PassengerId,
+             x = Pclass,
+             fill = Pclass)) +
+  geom_boxplot() +
+  labs(title = "Distirbution of passenger IDs",
+       y = "Passenger ID",
+       x = "Passenger Class",
+       fill = "Passenger class") +
+  theme_minimal()+
+  scale_fill_brewer(palette = "Dark2", type = "qual") +
+  theme(legend.position = "none")
+
+```
+
+### Sex
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+train %>%
+  group_by(Survived, Sex) %>% 
+  summarise(n = n(), .groups = "drop") %>% 
+  mutate(percentage = round(n*100/sum(n), 2),
+         label = paste0(percentage,"%"),
+         Survived = case_match(Survived,
+                               "0" ~ "deceased",
+                               "1" ~ "survived")) %>% 
+  ggplot(aes(x = Sex,
+             y = n,
+             fill = Sex,
+             label = label)) +
+  geom_col() +
+  facet_grid(~Survived) +
+  labs(title = "Survival ratios for each sex",
+       y = "Passenger count",
+       x = "Sex",
+       fill = "Sex") +
+  theme_minimal()+
+  scale_fill_brewer(palette = "Dark2", type = "qual") +
+  theme(legend.position = "none")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+train %>% 
+  group_by(Pclass, Survived) %>% 
+  summarise(n = n(), .groups = "drop") %>% 
+  mutate(percentage = round(n*100/sum(n), 2), 
+         label = paste0(percentage,"%"),
+         Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  ggplot(aes(x = fct_inseq(Pclass),
+             y = n,
+             fill = Survived,
+             label = label)) +
+    geom_col() +
+    labs(title = "Survival across classes",
+         y = "Passenger count",
+         x = "Passenger class",
+         fill = "Survival status") +
+  geom_label(position = position_stack(0.5),
+             show.legend = FALSE) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2", type = "qual")
+```
+
+It is not apparent from the correlation map that age has any influence on survival. Children (and women) were more likely to be saved. From this information we can already infer that the relationship between survival and age is not linear as the likelihood of survival does not increase with age. Let us take a closer look at the distribution of survival rates across age for each sex.
+
+### Age
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+train %>% 
+  mutate(Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  ggplot(aes(x = Age)) +
+  geom_histogram(aes(fill = Survived,
+                     bin = 50),
+                 color = "black") +
+  labs(title = "Age distribution of male and female passengers",
+     y = "Age",
+     x = "Class",
+     fill = "Survival status") +
+  facet_grid(Sex ~ .) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2", type = "qual")
+```
+
+#### Age distribution for both sexes in each passenger class
+```{r echo=FALSE, warning=FALSE}
+train %>% 
+  mutate(Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  ggplot(aes(x = fct_inseq(Pclass), 
+             y = Age)) +
+  geom_boxjitter(aes(fill = Survived),
+                 position = position_dodge(width = 0.5),
+                 width = 0.4,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4) +
+  labs(title = "Age distribution of male passengers in each class",
+       y = "Age",
+       x = "Passenger class",
+       fill = "Survival status") +
+  facet_grid(~Sex) + 
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2", type = "qual")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+train %>%
+  group_by(Pclass, Sex, Survived) %>% 
+  summarise(n = n(), .group = "drop") %>%  
+  mutate(Percent = round(n*100/sum(n)),
+         Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  ggplot(aes(x = interaction(fct_inseq(Pclass), Sex),
+             y = Percent,
+           fill = Survived)) +
+  geom_bar(stat="identity",
+           width = 0.4,
+           position = position_dodge(width = 0.6)) +
+  labs(title = "Survival based on Passenger Class and Sex",
+       y = "Passengers [%]",
+       x = "Class/Sex",
+       fill = "Survival status") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2", type = "qual")
+```
+
+
+### Embarked
+```{r echo=FALSE, message=FALSE}
+train %>% 
+  filter(!is.na(Embarked)) %>% 
+  group_by(Embarked, Survived) %>% 
+  summarise(n = n(), .groupes = "drop") %>% 
+  mutate(percent = round(n*100/sum(n), 2), 
+         label = paste0(percent,"%"),
+         Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  ggplot(aes(x = Embarked,
+             y = n,
+             fill = Survived,
+             label = label)) +
+    geom_col() +
+    labs(title = "Numbers of survivors per port of embarkation",
+         y = "Count",
+         x = "Port of embarkation",
+         fill = "Survival status") +
+  geom_label(position = position_stack(0.5),
+             show.legend = FALSE) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2", type = "qual")
+  
+```
+
+```{r echo=FALSE, message=FALSE}
+train %>% 
+  filter(!is.na(Embarked)) %>%
+  group_by(Embarked, Pclass) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(prop = count/sum(count)) %>%
+  ggplot(aes(x = Embarked, 
+             y = prop, 
+             fill = fct_inseq(Pclass))) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Proportion of passengers in each class per port of embarkation",
+       y = "Passengers [%]",
+       x = "Place of embarkation",
+       fill = "Class") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Dark2", type = "qual")
+  
+```
+
+
+### Ticket
+The ticket column contains numeric and mixed entries. We will investigate whether there are any differences in the ticket types, i.e. numeric vs. non-numeric, between different starting integers, different strings of the non-numeric, etc. First we will separate numeric and non-numeric types and group the ticket types based on strings and first integers.
+
+```{r echo=TRUE, warning=FALSE}
+train <- train %>%
+  # transform values to numeric. if not possible, it will default to NA
+  mutate(Numeric_ticket = !is.na(as.numeric(Ticket)),
+         # transform to lower case to merge identical entries with different capitalization
+         Ticket = tolower(Ticket),
+         # create categorical values based on evaluation of numeric_ticket.
+         Ticket_group = case_when(
+           #  extract string if non-numeric
+         Numeric_ticket == FALSE ~ str_extract(Ticket, "^[^\\s]+"),
+         # extract first integer if numeric
+         Numeric_ticket == TRUE ~ str_extract(Ticket, "^\\d")),
+         Ticket_group = gsub("\\.", "", Ticket_group))
+  
+```
+
+```{r echo=FALSE}
+train %>% 
+  count(Survived, Numeric_ticket, name = "Count") %>% 
+  group_by(Numeric_ticket) %>% 
+  mutate(Percentage = round(Count*100/sum(Count))) %>% 
+  arrange(Numeric_ticket) 
+```
+
+```{r}
+# group tickets by their first number or letter
+train %>% 
+  mutate(Ticket_class = str_extract(Ticket, "^\\S{1}")) %>% 
+  group_by(Ticket_class) %>% 
+  # count(Survived, Numeric_ticket, name = "Count") %>% 
+  # group_by(Numeric_ticket) %>% 
+  # mutate(Percentage = round(Count*100/sum(Count))) %>% 
+  # arrange(Numeric_ticket) 
+```
+
+
+There is no difference in survival rate between numerical and non-numerical tickets. 
+We can further divide each class.
+
+```{r echo=FALSE}
+train %>% 
+  count(Survived, Ticket_group, name = "Count") %>% 
+  group_by(Ticket_group) %>% 
+  mutate(Percentage = round(Count*100/sum(Count))) %>%
+  # sort groups based on highest number of survivors
+  arrange(desc(Count * (Survived == 1)), .by_group = TRUE)
+```
+
+There are too many groups to infer any meaningful pattern. Some groups could probably be merged but without any detailed information we can only speculate whether "a/5" and "a5" are the same.
+
+From "ticket" we can create a new variable "sharing_ticket", which indicates how many passengers shared the same ticket.
+```{r}
+train <- train %>% 
+  mutate(Fam_size = SibSp + Parch) %>%
+  group_by(Fam_size, Ticket) %>% 
+  mutate(Sharing_ticket = n()) %>% 
+  ungroup()
+```
+
+
+### EDA summary
+
+Sex and passenger class are highly correlated with survival.
+
+The cabin variable has too many missing values to directly impute them. 
+
+The proportion of missing values in the variables "Embarked", "Fare" and "Age" is low enough to impute them.
+
+Passenger ID and Ticket can also be dropped as they hold no predictive value.
+
+
+## Model recipe
+
+- Remove PassengerID, Cabin, Ticket
+- Encode categorical features
+- Transform and scale numeric features
+-Impute missing values in 
+  - Embarked
+  - Age
+  - Fare
+
+
+```{r cv_folds}
+# create folds for cross-validation
+set.seed(123)
+train_folds <- vfold_cv(data = train, repeats = 2)
+
+train_folds
+```
+
+```{r recipe}
+#  create recipe
+rec <- recipe(Survived ~ ., train) %>% 
+  step_select(!c(starts_with("Ticket"), Passenger_ID, Cabin)) %>% 
+  step_impute_mode(Embarked) %>% 
+  step_impute_knn(Age, neighbors = 3) %>% 
+```
+
+```{r recipe_titles}
+rec <- recipe(Survived ~ ., train) %>% 
+  # step_select(!c(starts_with("Ticket"), Passenger_ID, Cabin)) %>% 
+  step_impute_mode(Embarked) %>% 
+  step_mutate(Name = gsub(" ", "", Name),
+             Title = str_extract(Name, ",([a-zA-Z]*)"),
+             Title = gsub(",", "", Title)) %>% 
+  step_select(-Name) %>% 
+  step_impute_knn(Age, 
+                  impute_with = imp_vars(Title, Ticket, SibSp),
+                  neighbors = 3) 
+```
+
+### Imputation
+
+#### Fare
+```{r echo=FALSE, warning=FALSE}
+train%>% 
+  ggplot(aes(x = fct_inseq(Pclass),
+             y = Fare,
+             fill = Pclass)) +
+  geom_boxplot() +
+  labs(title = "Fares in each passenger class",
+       y = "Fare",
+       x = "Passenger class") +
+  theme_minimal() + 
+  theme(legend.position = "none")
+```
+
+```{r}
+train%>% 
+  group_by(Pclass) %>% 
+  summarise(Count = n(),
+            Mean_fare = round(mean(Fare, na.rm = TRUE), 1),
+            Median_fare = median(Fare, na.rm = TRUE)) 
+```
+
+From the differences between mean and median as well as the box plot above we see few but significant outliers. 
+Fare is also correlated with passenger family size. Let us look at the fares across different family sizes in each passenger class.
+
+```{r echo=FALSE}
+train%>% 
+  filter(!is.na(Fare)) %>% 
+  ggplot(aes(x = fct_inseq(SibSp),
+             y = Fare,
+             fill = factor(SibSp))) +
+  geom_boxplot() +
+  labs(title = "Per class fares for passengers travelling with family",
+       y = "Fare",
+       x = "Siblings/Spouse") +
+  facet_wrap(~fct_inseq(Pclass)) +
+  theme_minimal() +
+  theme(legend.position = "none") 
+```
+
+```{r echo=FALSE}
+train %>% 
+  filter(!is.na(Fare)) %>% 
+  ggplot(aes(x = fct_inseq(Parch),
+             y = Fare,
+             fill = fct_inseq(Parch))) +
+  geom_boxplot() +
+  labs(title = "Per class fares for passengers travelling with parents/children",
+       y = "Fare",
+       x = "Parents/Children") +
+  facet_wrap(~Pclass) +
+  theme_minimal() +
+  theme(legend.position = "none") 
+```
+
+We can now examine some summary statistics to make a sound decision on how we want to impute.
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+train %>% 
+  group_by(Pclass, Parch) %>% 
+  summarise(Fare_median = median(Fare, na.rm = TRUE),
+            Fare_mean = mean(Fare, na.rm = TRUE),
+            SD = sd(Fare, na.rm = TRUE),
+            Count = n())
+```
+Due to the large standard deviation in class 1 we choose the median for imputation of fares. 
+Again we will create a function for the imputation.
+```{r Fare imputation, echo=TRUE}
+impute_fare <- function(df, na.rm = FALSE){
+  
+  grouped_median_fares <- df %>% 
+    group_by(Pclass, Parch) %>% 
+    summarise(Fare_median = median(Fare, na.rm = TRUE),
+              .groups = "drop") 
+  
+  df <- df %>%
+    left_join(grouped_median_fares, by = c("Pclass", "Parch")) %>% 
+    mutate(Fare = coalesce(Fare, Fare_median)) %>%
+    select(-Fare_median)
+    
+  return(df)
+}
+```
+
+
+Check missing values before and after imputation.
+```{r echo=FALSE}
+train_imputed %>% 
+  group_by(Pclass) %>% 
+  summarise(Missing = sum(is.na(Fare))) %>% 
+  kable("simple")
+```
+
+```{r echo=FALSE}
+impute_fare(train_imputed) %>% 
+  group_by(Pclass) %>% 
+  summarise(Missing = sum(is.na(Fare))) %>% 
+  kable("simple")
+```
+
+
+```{r message=FALSE, warning=FALSE}
+train_imputed <- impute_fare(train_imputed)
+```
+
+
+#### Age 
+
+For the imputation of age, we will extract the titles from inside the name column. 
+Then we will create title groups and calculate the mean and standard deviation for each, from which we will sample and impute. 
+
+```{r}
+options(tibble.print_max = 17, tibble.print_min = 4)
+
+train%>% 
+    # Remove spaces
+    mutate(Name = gsub(" ", "", Name),
+           # Extract string following (including) comma
+         Title = str_extract(Name, ",([a-zA-Z]*)"),
+         # Remove comma
+         Title = gsub(",", "", Title)) %>% 
+  select(!Name) %>% 
+  group_by(Title) %>% 
+  count(Title, name = "Count", sort = TRUE)
+```
+
+
+```{r echo=TRUE}
+
+extract_titles <- function(df, na.rm = FALSE){
+
+  df <- df %>% 
+      mutate(Name = gsub(" ", "", Name),
+             Title = str_extract(Name, ",([a-zA-Z]*)"),
+             Title = gsub(",", "", Title)) %>% 
+    # remove name variable
+      select(-Name)
+  
+  return(df)
+}
+```
+
+```{r echo=TRUE}
+train_with_titles <- extract_titles(train)
+```
+
+```{r echo=TRUE, paged.print=FALSE}
+train_with_titles %>% 
+  count(Title) %>% 
+  arrange(desc(n))
+```
+We now have extracted 17 distinct titles of which most have only few observations. 
+To perform robust imputation we need enough data in each group.
+Therefore will will merge all titles into four groups: Mr, Miss, Mrs and Master. 
+We will merge "Lady"/"Countess"/"Ms" with "Mrs", "Mme" with "Miss", and all other titles with "Mr".
+Create another function called "aggregate titles".
+```{r echo=TRUE}
+aggregate_titles <- function(df, na.rm = FALSE){
+  # create a negative selector helper function
+  `%nin%` <- purrr::negate(`%in%`)
+  
+  df <- df %>% 
+      mutate(
+        # Aggregate female titles first
+        Title = case_when(
+          Title %in% c("Lady", "theCountess", "Ms") ~ "Mrs",
+          Title == "Mme" ~ "Miss",
+          TRUE ~ Title
+          ),
+        # Aggregate everything else
+        Title = case_when(
+          Title %nin% c("Mr", "Miss", "Mrs", "Master") ~ "Mr",
+          TRUE ~ Title
+          )
+        )
+  
+  return(df)
+}
+```
+
+```{r echo=T, results='hide'}
+train_with_titles <- aggregate_titles(train_with_titles)
+```
+
+```{r echo=FALSE}
+train_with_titles %>% 
+  group_by(Title) %>% 
+  summarise(Count  = n(), 
+            Mean   = round(mean(Age, na.rm = TRUE), 1), 
+            Median = median(Age, na.rm = TRUE), 
+            SD     = round(sd(Age, na.rm = TRUE), 1)) %>% 
+  kable("simple")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+train_with_titles %>% 
+  group_by(Title) %>% 
+  filter(!is.na(Age)) %>% 
+  ggplot(aes(x = Title,
+             y = Age)) +
+  geom_boxjitter(aes(fill = Title),
+                 position = position_dodge(width = 0.5),
+                 width = 0.4,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4) +
+  labs(title = "Age distribution across title groups",
+       y = "Age",
+       x = "Title") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual()
+```
+
+```{r echo=FALSE}
+train_with_titles %>% 
+  group_by(Title) %>% 
+  filter(!is.na(Age)) %>%
+  ggplot(aes(x = Age)) +
+  geom_density(aes(color = Title)) +
+  facet_grid(Title ~ .) +
+  labs(title = "Density plot of age",
+       y = "Dnesity",
+       x = "Age",
+       color = "Title") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_color_manual()
+
+```
+
+
+Since the title "Miss" is used for unmarried women, we will split the "Miss" group based on whether they were traveling with Parents and/or children -  assuming that those without are older.  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+train_with_titles %>% 
+  filter(!is.na(Age)) %>%  # & Title == "Miss") %>% 
+  mutate(Family = case_when(
+    Parch == 0 ~ "No",
+    TRUE ~ "Yes"
+  )) %>% 
+  ggplot(aes(x = Family,
+             y = Age)) +
+  geom_boxjitter(aes(fill = Family),
+                 position = position_dodge(width = 0.5),
+                 width = 0.4,
+                 jitter.shape = 21,
+                 jitter.color = NA,
+                 outlier.shape = 1,
+                 errorbar.draw = TRUE,
+                 errorbar.length = 0.4) +
+  labs(title = "Age distribution of passengers with family",
+       y = "Age",
+       x = "Title") +
+  facet_grid(~Title) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank()) +
+  scale_fill_manual()
+```
+Our assumption turns out to be true so we will consider it within our imputation function.
+The same assumption seems to be true for young men ("Master") but with just one observation there is not enough data to support it.
+Arguably one could also merge "Mr" and "Mrs" as their distributions are very similar. 
+
+```{r echo=TRUE}
+impute_age <- function(df){
+  # set seed for reproducibility
+  set.seed(1234)
+  
+  # helper function to calculate mean+sd
+  group_mu_sd <- df %>% 
+    mutate(Title = ifelse(Title == "Miss" & "Parch" > 0, "Miss_fam", Title)) %>% 
+    group_by(Title) %>% 
+    summarise(Mean = round(mean(Age, na.rm = TRUE)),
+              SD = round(sd(Age, na.rm = TRUE)),
+              .groups = "drop")
+  
+  # helper function for sampling from a normal distribution but within one standard deviation from the mean
+  sample_rnorm_within_bounds <- function(mean, sd, lower = mean - sd, upper = mean + sd, max_attempts = 1000) {
+    for (i in 1:max_attempts) {
+      sample <- rnorm(1, mean, sd)
+      if (sample >= lower && sample <= upper) {
+        return(sample)
+      }
+    }
+    stop(paste("Failed to sample a value within bounds after", max_attempts, "attempts."))
+  }
+  
+  # impute age by random sampling from normal distribution
+  df_age_imputed <- df %>%
+    mutate(Title = ifelse(Title == "Miss" & "Parch" > 0, "Miss_fam", Title)) %>%
+    left_join(group_mu_sd, by = "Title") %>% 
+    group_by(Title) %>% 
+    rowwise() %>% 
+    mutate(Age = ifelse(
+      is.na(Age),
+      round(
+        sample_rnorm_within_bounds(mean = Mean, sd = SD)
+        ),
+      Age
+      )
+    ) %>% 
+    ungroup() %>% 
+    select(-c(Mean, SD))
+  
+  return(df_age_imputed)
+}
+```
+
+Again we will compare the number of missing values before 
+```{r echo=FALSE}
+train_with_titles %>% 
+  group_by(Title) %>% 
+  summarise(Missing = sum(is.na(Age))) %>% 
+  kable("simple")
+```
+
+...and after imputation
+```{r echo=FALSE}
+impute_age(train_with_titles) %>% 
+  group_by(Title) %>% 
+  summarise(Missing = sum(is.na(Age)),
+            .groups = "drop") %>% 
+  kable("simple")
+```
+
+Let us compare the mean and standard deviation of the original age values
+```{r echo=FALSE}
+train_with_titles %>% 
+  filter(!is.na(Age)) %>%
+  mutate(Title = ifelse(Title == "Miss" & "Parch" > 0, "Miss_fam", Title)) %>% 
+  group_by(Title) %>% 
+    summarise(Count = n(),
+      Mean = round(mean(Age, na.rm = TRUE), 1),
+      SD   = round(sd(Age, na.rm = TRUE), 1)) %>% 
+  kable("simple")
+```
+
+...with the imputed values
+```{r echo=FALSE}
+impute_age(train_with_titles) %>% 
+  group_by(Title) %>% 
+    summarise(Count = n(),
+      Mean = round(mean(Age, na.rm = TRUE), 1),
+      SD   = round(sd(Age, na.rm = TRUE), 1),
+      .groups = "drop") %>% 
+  kable("simple")
+```
+
+We can also compare the densities of Age before and after imputation.
+```{r echo=FALSE}
+train_with_titles %>% 
+  filter(!is.na(Age)) %>% 
+  ggplot() +
+  geom_density(aes(x = Age)) +
+  labs(title = "Density plot of age before imputation",
+       y = "Density",
+       x = "Age") +
+  theme_minimal()
+```
+
+```{r echo=FALSE}
+impute_age(train_with_titles) %>% 
+  ggplot() +
+  geom_density(aes(x = Age)) +
+    labs(title = "Density plot of age after imputation",
+       y = "Density",
+       x = "Age") +
+  theme_minimal()
+
+```
+
+```{r}
+train_imputed <- impute_age(train_with_titles) %>% 
+  select(-Title)
+```
+
+### Cabin
+The cabin variables has the highest proportion of missing values - too many to impute them. 
+However, we will explore it and try to extract meaningful information.
+The values start with a character (the deck) followed by the cabin number. We will group cabin values based on the deck.
+
+```{r}
+train_imputed <- train_imputed %>% 
+  mutate(Deck = substring(Cabin, 1, 1),
+         # rename NAs as "M" for missing
+         Deck = replace_na(Deck, "M"))
+
+train_imputed %>% 
+  count(Deck, name = "Observations") %>% 
+  kable()
+```
+
+Let us look at the distributions of survivors and passenger classes across decks.
+```{r Deck Survived, echo=FALSE}
+train_imputed %>% 
+    # filter(!is.na(Embarked)) %>%
+  group_by(Deck, Survived) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(prop = count/sum(count),
+         Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>%
+  ggplot(aes(x = Deck, 
+             y = prop, 
+             fill = Survived)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Proportion of survivors on each deck",
+       y = "Passengers [%]",
+       x = "Deck") +
+  theme_minimal() +
+  scale_fill_manual()
+```
+
+
+On https://titanicfacts.net/titanic-ship/ we find some information about the passenger decks: 
+''''
+How many decks did the Titanic have?
+
+There were 10 decks in total. From top to bottom they were the Boat Deck, the Promenade Deck (deck A), passenger decks B to G, Orlop Deck, and the Tank Top.
+'''
+
+Let us investigate how the individual classes are distributed across the different decks.
+```{r Deck PClass, echo=FALSE}
+train_imputed %>% 
+    # filter(!is.na(Embarked)) %>%
+  group_by(Deck, Pclass) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(prop = count/sum(count)) %>%
+  ggplot(aes(x = Deck, 
+             y = prop, 
+             fill = Pclass)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Proportion of passengers from each class on each deck",
+       y = "Passengers [%]",
+       x = "Deck",
+       fill = "Class") +
+  theme_minimal() +
+  scale_fill_manual()
+```
+We already know that passenger class and fare are correlated with survival. 
+Let's see if there are any differences in survival rates within each class based on the deck of the cabin.
+We will exclude decks A, T and missing values.
+```{r}
+train_imputed %>% 
+  count(Deck, Pclass, Survived) %>% 
+  mutate(Survived = case_match(Survived,
+                              "0" ~ "deceased",
+                              "1" ~ "survived")) %>% 
+  group_by(Deck, Pclass) %>% 
+  mutate(Passengers = sum(n)) %>% 
+  group_by(Survived) %>% 
+  mutate(Survived_prop = n*100/Passengers) %>% 
+  filter(Deck %in% c("B", "C", "D", "E", "F", "G")) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = interaction(Deck, Pclass),
+             y = Survived_prop, 
+             fill = Survived,
+             label = n
+             )) +
+  geom_bar(stat = "identity", position = "fill") +
+  geom_label(aes(label = n),
+             position = position_stack(vjust = 0.5),
+             size = 3,
+             show.legend = FALSE) +
+  labs(title = "Survival rates in each class based on cabin deck",
+       y = "Passengers [%]",
+       x = "Deck, Class") +
+  theme_minimal() +
+  scale_fill_manual()
+  
+```
+
+
+```{r Fares in each Class/Deck, echo=FALSE, message=FALSE, warning=FALSE}
+train_imputed %>% 
+  group_by(Deck, Pclass) %>% 
+  ggplot(aes(x = interaction(Deck, Pclass), 
+             y = Fare)) +
+  geom_boxplot(aes(fill = Pclass)) +
+  labs(title = "Distribution of fares for each deck and passenger class",
+       y = "Fare",
+       x = "Deck, Class") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual()
+```
+One could argue that fare decreases as we get to the lower decks but this is only true for the first class - where sample size is much higher.
+We could thus assign missing values to decks based on fare for 1st class-passengers. However, for second and third-class passengers, based on lacking data, we simply cannot make this assumption. With more data, we could bin the fares based on the quantiles of the distribution of fares in each respective class.
+
+Based on the information above we will merge decks A and T with deck E to match the original passenger decks.
+```{r echo=TRUE}
+train_imputed <- train_imputed %>% 
+  mutate(Deck = case_when(
+    Deck %in% c("A", "T") ~ "E",
+    .default = Deck
+  ))
+```
+
+Passengers from the first class populated decks B to E, second class decks D to F and third class decks E to G. Thus we will create 4 bins for class 1 and 3 bins for classes 2 and 3, respectively.
+First, we need to find the respective quantiles.
+```{r}
+Deck_qunatiles <- train_imputed %>% 
+  filter(Deck == "M") %>% 
+  group_by(Pclass) %>% 
+  summarise(
+    Q1 = if_else(Pclass == 1, quantile(Fare, probs = 0.25), quantile(Fare, probs = 1/3)),
+    Q2 = if_else(Pclass == 1, round(quantile(Fare, probs = 0.5)), round(quantile(Fare, probs = 2/3))),
+    Q3 = if_else(Pclass == 1, quantile(Fare, probs = 0.75), NA_real_),
+    .groups = "drop"
+      ) %>% 
+  distinct()
+
+Deck_qunatiles
+```
+
+```{r}
+train_imputed %>% 
+  
+  
+```
+
+
+### Feature encoding and scaling
+
+In this section we will encode categorical variables.
+We will use the fastDummies package to make quick work of encoding all character and factor columns.
+Also, we remove the first dummy column to avoid multicollinearity issues down the line.
+```{r echo=TRUE}
+train_fe <- train_imputed %>% 
+  mutate(SibSp = as.factor(SibSp),
+         Parch = as.factor(Parch)) %>% 
+  fastDummies::dummy_columns(remove_first_dummy = TRUE,
+                             remove_selected_columns = TRUE)
+```
+
+```{r echo=FALSE}
+str(train_fe)
+```
+
+In our approach we will compare different classification techniques.
+While tree-based models are insensitive to different feature scales and outliers, distance-based models like k-nearest neighbors will perform better when features are scaled uniformly.
+There are still two numeric variables in the data: fare and age. 
+Let us again look at their distributions.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+numeric_train <- train_fe %>% 
+  select(Age, Fare)%>% 
+  names()
+
+num_plots <- list()
+colors_num <- lette("GrandBudapest1", length(numeric_train), type = "discrete")
+
+for (i in seq_along(numeric_train)) {
+  
+  var <- numeric_train[i]
+  
+  p <- train_fe %>% 
+    ggplot(aes_string(x = var)) +
+    geom_histogram(fill = colors_num[[i]],
+                   color = "black") +
+    labs(title = paste("Distribution of", var),
+       y = "Count",
+       x = var) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  num_plots <- append(num_plots, list(p))
+}
+
+do.call(grid.arrange, c(num_plots, ncol = 2))
+```
+
+```{r}
+numeric_train <- train_fe %>% 
+  select(Age, Fare)%>% 
+  names()
+
+num_plots <- list()
+colors_num <- lette("GrandBudapest1", length(numeric_train), type = "discrete")
+
+for (i in seq_along(numeric_train)) {
+  
+  var <- numeric_train[i]
+  
+  p <- train_fe %>% 
+    ggplot(aes_string(x = var)) +
+    geom_boxplot(fill = colors_num[[i]],
+                 outlier.colour =  lette("GrandBudapest1")[3]) +
+    labs(title = paste("Boxplot of", var),
+       x = var) +
+    coord_flip() +
+    theme_minimal() +
+    theme(axis.text.y = element_blank()) +
+    theme(legend.position = "none")
+  
+  num_plots <- append(num_plots, list(p))
+}
+
+do.call(grid.arrange, c(num_plots, ncol = 2))
+```
+We want to scale both age and fare to [0, 1] in order to have a uniform feature scaling.
+This is achieved by Min-Max scaling. However, Min-Max scaling is sensitive to outliers - of which we find many in fare.
+Therefore we will first apply log-transform in order to decrease the variance.
+```{r}
+train_fe <- train_fe %>%
+  # log1p adds 1 to each value in order to avoid -Inf values after transformation
+  mutate(Fare = log1p(Fare))
+```
+
+Now we will scale both variables to [0, 1].
+```{r}
+preproc_scale <- preProcess(train_fe[, c("Fare", "Age")], method = "range", rangeBounds = c(0, 1))
+data_scaled <- predict(preproc_scale, newdata = train_fe[, c("Fare", "Age")])
+```
+
+```{r message=FALSE, warning=FALSE}
+data_scaled %>% 
+  ggplot() +
+  geom_histogram(aes(x=Fare),
+                 fill = lette("GrandBudapest1")[2],
+                 color = "black") +
+  labs(title = "Distribution of fare after log-transformation and scaling",
+       y = "Count",
+       x = "Fare") +
+  theme_minimal()
+  
+```
+Fare is now distributed across the whole interval.
+
+```{r}
+summary(train_fe)
+```
+
+
+For ease of application we will implement all of the steps outlined above into a handy function for data clean up and imputation.
+```{r}
+clean_and_impute <- function(df, na.rm = FALSE){
+  
+  # Helper functions----
+  # create a negative selector helper function
+  `%nin%` <- purrr::negate(`%in%`)
+  
+  # helper function for sampling from a normal distribution within one standard deviation from the mean
+  sample_rnorm_within_bounds <- function(mean, sd, lower = mean - sd, upper = mean + sd, max_attempts = 1000) {
+    for (i in 1:max_attempts) {
+      sample <- rnorm(1, mean, sd)
+      if (sample >= lower && sample <= upper) {
+        return(sample)
+      }
+    }
+    stop(paste("Failed to sample a value within bounds after", max_attempts, "attempts."))
+  }
+  
+  # remove columns
+  df_clean <- df %>% 
+    select(-c(Cabin, PassengerId, Ticket))
+  
+  # Imputation----
+  
+  # Impute location of embarkation
+  df_emb <- df_clean %>% 
+    mutate(Embarked = case_when(
+      is.na(Embarked) ~ impute_mode(train_cln, "Embarked"),
+      TRUE ~ as.character(Embarked)
+    ))
+  
+  # Impute_fare 
+  grouped_median_fares <- df_emb %>% 
+    group_by(Pclass, Parch) %>% 
+    summarise(Fare_median = median(Fare, na.rm = TRUE))
+  
+  df_fare <- df_clean %>%
+    left_join(grouped_median_fares, by = "Pclass") %>% 
+    mutate(Fare = coalesce(Fare, Fare_median)) %>%
+    select(-Fare_median)
+  
+  # Check for complete values
+  ifelse(sum(is.na(df_fare$Fare)) == 0, 
+         print("Fare successfully imputed!"), 
+         print("Something went wrong!"))
+  
+  # Impute age 
+  # Create title variable
+  df_titles <- df_fare %>% 
+    mutate(Name = gsub(" ", "", Name),
+           Title = str_extract(Name, ",([a-zA-Z]*)"),
+           Title = gsub(",", "", Title)) %>% 
+  # remove name variable
+    select(!Name) %>% 
+    mutate(
+      # Aggregate female titles first
+      Title = case_when(
+        Title %in% c("Lady", "theCountess", "Ms") ~ "Mrs",
+        Title == "Mme" ~ "Miss",
+        TRUE ~ Title
+        ),
+      # Aggregate everything else
+      Title = case_when(
+        Title %nin% c("Mr", "Miss", "Mrs", "Master") ~ "Mr",
+        TRUE ~ Title
+        )
+      ) 
+
+  # Helper function to calculate mean+sd of each title group
+  group_mu_sd <- df_titles %>% 
+    mutate(Title = ifelse(Title == "Miss" & Parch > 0, "Miss_fam", Title)) %>% 
+    group_by(Title) %>% 
+    summarise(Mean = round(mean(Age, na.rm = TRUE)),
+              SD = round(sd(Age, na.rm = TRUE)))
+  
+  # impute age by random sampling from normal distribution
+  df_imputed <- df_titles %>%
+    mutate(Title = ifelse(Title == "Miss" & Parch > 0, "Miss_fam", Title)) %>%
+    left_join(group_mu_sd, by = "Title") %>% 
+    group_by(Title) %>% 
+    rowwise() %>% 
+    mutate(Age = ifelse(
+      is.na(Age),
+      round(rnorm(1, mean = Mean, sd = SD)),
+      Age
+    )) %>% 
+    ungroup() %>% 
+    select(-c(Mean, SD, Title))
+  
+  # Check for complete values
+  ifelse(sum(is.na(df_imputed$Age)) == 0, 
+         print("Fare successfully imputed!"), 
+         print("Something went wrong!"))
+  
+  return(df_imputed)
+  
+}
+```
+
+
+
+## Modeling
+
+```{r}
+# specify models
+glm_spec <- logistic_reg() %>% set_engine("glm")
+
+rf_spec <- rand_forest(trees = 100) %>% set_engine("ranger") %>% set_mode("classification")
+
+svm_spec <- svm_rbf() %>% set_mode("classification")
+```
+
+```{r}
+# add model to recipe
+doParallel::registerDoParallel()
+
+mod_metrics <- metric_set(roc_auc, precision, mcc, f_meas)
+
+glm_rs <- training_flow %>% 
+  add_model(glm_spec) %>% 
+  fit_resamples(
+    resamples = train_folds,
+    metrics = mod_metrics,
+    control = control_resamples(save_pred = T)
+  )
+```
+
