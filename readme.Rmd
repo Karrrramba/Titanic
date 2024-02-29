@@ -19,6 +19,7 @@ library(RColorBrewer)
 library(viridis)
 library(Hmisc)
 library(corrplot)
+library(ggpubr)
 library(ggpol)
 library(gridExtra)
 library(rlang)
@@ -27,22 +28,23 @@ library(scales)
 ```
 
 Set options
-```{r}
+```{r options}
 options(digits = 2,
         # do not show warning messages
         warn = -1,
         # do not user scientific number formatting
         scipen = 999)
+
+theme_set(theme_minimal())
 ```
 
 Load data
-```{r load titanic data, warning=FALSE}
-train <- read_csv("./Data/train.csv", col_types = "nffcfnffcnfc")
-test <- read_csv("./Data/test.csv", col_types = "nffcfnffcnfc")
+```{r load_data, warning=FALSE}
+train <- read_csv("./Data/train.csv", col_types = "nffcfnffcnff")
+test <- read_csv("./Data/test.csv", col_types = "nffcfnffcnff")
 ```
 
 ## Exploratory data analysis
-
 ```{r}
 str(train)
 ```
@@ -51,17 +53,24 @@ str(train)
 skimr::skim(train)
 ```
 
-Let us also check the distribution of the dependent variable. By doing this we get an idea of how balanced the data set is and whether we have to do something to balance groups before modeling.
+### Missing values per passenger
+```{r}
+train %>% 
+  mutate(across(everything(), as.character)) %>% 
+  pivot_longer(cols = !Name, names_to = "cat", values_to = "val") %>% 
+  filter(is.na(val)) %>% 
+  count(Name, sort = TRUE)
+```
 
 ```{r class_balance}
 train %>% 
   select(Survived) %>% 
   group_by(Survived) %>% 
   summarise(Count = n()) %>% 
-  mutate(Freq = paste0(round(100 * Count/sum(Count), 1), "%")) 
+  mutate(Proportion = paste0(round(100 * Count/sum(Count), 1), "%")) 
 ```
 
-```{r echo=TRUE}
+```{r fare_NA, echo=TRUE}
 train <- train %>%
   # encode blank entries and spaces
   mutate(
@@ -74,85 +83,98 @@ train <- train %>%
   )
 ```
 
-```{r}
-train %>% 
-  summarise_all(list( ~sum(is.na(.)))) %>% 
-  pivot_longer(cols = everything(), 
-               names_to = "Variable", 
-               values_to = "Missing") %>% 
-  arrange(desc(Missing)) %>% 
-  mutate(n = 891,
-         Proportion_missing = paste0(round(Missing*100/n, 1), "%")) %>% 
-  select(!n)
+## Base model recipe
+```{r base_recipe}
+base_rec <- recipe(Survived ~ ., train)
+summary(base_rec)
 ```
 
-```{r include=FALSE}
-train <- train %>% 
-  mutate(across(c(PassengerId, Age, SibSp, Parch, Fare), as.integer),
-         across(c(Survived, Pclass, Embarked, Sex), as.factor))
+```{r cv_folds}
+# create folds for cross-validation
+set.seed(123)
+train_folds <- vfold_cv(data = train, repeats = 2, strata = Survived)
+
+train_folds
 ```
 
-```{r include=FALSE}
-train$Pclass <- factor(train$Pclass, levels = c(1, 2, 3))
-```
 
-Divide the variables into numeric and categorical and visualize each group.
-```{r}
-numeric_vars <- train %>% 
-  select(where(is.numeric)) %>% 
-  names()
-
-categorical_vars <- train %>% 
-  select(Survived, Pclass, Sex, Embarked, SibSp, Parch) %>% 
-  names()
-```
 
 ### Numeric variables
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-numeric_plots <- list()
+```{r}
+plot_vars <- function(variables, geom) {
+  
+  numeric_plots <- list()
+  
+  # add fill and geom selection based on column type
+  
+  
 
-
-for (i in seq_along(numeric_vars)) {
+  for (i in seq_along(variables)) {
+    
+    var <- variables[i]
+    
+    p <- train %>% 
+      filter(!is.na(!!rlang::sym(var))) %>% 
+      ggplot(aes_string(x = var)) +
+      geom(color = "white") +
+      labs(title = paste("Distribution of", var),
+         y = "Count",
+         x = var) +
+      theme(legend.position = "none")
+    
+    numeric_plots <- append(numeric_plots, list(p))
+  }
   
-  var <- numeric_vars[i]
-  
-  p <- train %>% 
-    filter(!is.na(!!rlang::sym(var))) %>% 
-    ggplot(aes_string(x = var)) +
-    geom_histogram(color = "white") +
-    labs(title = paste("Distribution of", var),
-       y = "Count",
-       x = var) +
-    theme_minimal() +
-    theme(legend.position = "none")
-  
-  numeric_plots <- append(numeric_plots, list(p))
+  do.call(grid.arrange, c(numeric_plots, ncol = 1))
+    
 }
-
-do.call(grid.arrange, c(numeric_plots, ncol = 2))
 ```
 
-####total numbers of passengers travelling with their families.
-```{r echo=FALSE, paged.print=FALSE}
-train %>% 
-  count(SibSp, name = "Count") %>% 
-  kable("simple")
+```{r}
+dub_vars <- train %>% 
+  select(where(is.double)) %>% 
+  names()
+
+int_vars <- train %>% 
+  select(where(is.double)) %>% 
+  names()
+
+cat_vars <- train %>% 
+  select(where(is.double)) %>% 
+  names()
+
+
+plot_vars(dub_vars, geom_histogram)
+plot_vars()
 ```
 
-```{r echo=FALSE, paged.print=FALSE}
-train %>% 
-  count(Parch, name = "Count") %>% 
-  kable("simple")
+### Correlation map
+```{r corr_matrix, include=FALSE}
+correlation_matrix <- train %>%
+  select(where(is.numeric)) %>%
+  filter(complete.cases(.)) %>% 
+  hmisc::cor(as.matrix(.), method = "spearman")
+```
+
+```{r corr_plot, echo=FALSE}
+corrplot::corrplot(correlation_matrix, 
+         method = "square",
+         type = "lower",
+         order = "alphabet",
+         addCoef.col = 'black',
+         diag = FALSE)
 ```
 
 ### Categorical variables
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r categorical_vars, echo=FALSE, message=FALSE, warning=FALSE}
 categorical_plots <- list()
+cat_vars <- train %>% 
+  select(where(is.factor)) %>% 
+  names()
 
-for (i in seq_along(categorical_vars)) {
+for (i in seq_along(cat_vars)) {
   
-  var <- categorical_vars[i]
+  var <- cat_vars[i]
   var_levels <- length(unique(train[[var]]))
   # colors_cat <- 
   
@@ -164,7 +186,6 @@ for (i in seq_along(categorical_vars)) {
     labs(title = paste("Distribution of", var),
        y = "Count",
        x = var) +
-    theme_minimal() +
     scale_fill_brewer(palette = "Dark2", type = "qual") +
     theme(legend.position = "none")
   
@@ -173,31 +194,15 @@ for (i in seq_along(categorical_vars)) {
 
 do.call(grid.arrange, c(categorical_plots, ncol = 2))
 ```
-
-### Correlation map
-```{r include=FALSE}
-correlation_matrix <- train %>%
-  mutate(across(where(is.factor), as.numeric),
-         Survived =  as.integer(Survived)) %>%
-  select(where(is.numeric)) %>%
-  filter(complete.cases(.)) %>% 
-  cor(as.matrix(.), method = "spearman")
+#### Chi-square test
+```{r}
+train %>% 
 ```
 
-```{r, echo=FALSE}
-corrplot(correlation_matrix, 
-         method = "square",
-         type = "lower",
-         order = "alphabet",
-         addCoef.col = 'black',
-         diag = FALSE)
-```
+
 
 ### Passenger ID
-
-PassengerID shows no correlations with any other variable. It is evenly distributed across passenger class and sex - the two strongest correlations with the target variable.
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r id_survival_plot, echo=FALSE, message=FALSE, warning=FALSE}
 train %>% 
   mutate(Survived = case_match(Survived,
                               "0" ~ "deceased",
@@ -211,11 +216,10 @@ train %>%
      x = "Passenger ID",
      fill = "Survived") +
   facet_grid(Sex ~ .) +
-  theme_minimal() +
   scale_fill_brewer(palette = "Dark2", type = "qual")
 ```
 
-```{r, echo=FALSE}
+```{r id_pclass_plot, echo=FALSE}
 train %>% 
   ggplot(aes(y = PassengerId,
              x = Pclass,
@@ -225,14 +229,13 @@ train %>%
        y = "Passenger ID",
        x = "Passenger Class",
        fill = "Passenger class") +
-  theme_minimal()+
   scale_fill_brewer(palette = "Dark2", type = "qual") +
   theme(legend.position = "none")
 
 ```
 
 ### Sex
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r sex_survival_plot, echo=FALSE, message=FALSE, warning=FALSE}
 train %>%
   group_by(Survived, Sex) %>% 
   summarise(n = n(), .groups = "drop") %>% 
@@ -251,12 +254,11 @@ train %>%
        y = "Passenger count",
        x = "Sex",
        fill = "Sex") +
-  theme_minimal()+
   scale_fill_brewer(palette = "Dark2", type = "qual") +
   theme(legend.position = "none")
 ```
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+### Passenger class
+```{r pclass_survival_plot, echo=FALSE, message=FALSE, warning=FALSE}
 train %>% 
   group_by(Pclass, Survived) %>% 
   summarise(n = n(), .groups = "drop") %>% 
@@ -276,15 +278,54 @@ train %>%
          fill = "Survival status") +
   geom_label(position = position_stack(0.5),
              show.legend = FALSE) +
-  theme_minimal() +
   scale_fill_brewer(palette = "Dark2", type = "qual")
 ```
+### Fare
 
-It is not apparent from the correlation map that age has any influence on survival. Children (and women) were more likely to be saved. From this information we can already infer that the relationship between survival and age is not linear as the likelihood of survival does not increase with age. Let us take a closer look at the distribution of survival rates across age for each sex.
+```{r echo=FALSE, warning=FALSE}
+train%>% 
+  ggplot(aes(x = fct_inseq(Pclass),
+             y = Fare)) +
+  geom_boxplot(aes(color = Pclass)) +
+  labs(title = "Fares in each passenger class",
+       y = "Fare",
+       x = "Passenger class") +
+  theme(legend.position = "none") +
+  scale_color_brewer(palette = "Dark2", type = "qual")
+```
+```{r}
+train %>% 
+  group_by(fct_inseq(Pclass)) %>% 
+  summarise(Fare_mean = mean(Fare),
+            Fare_median = median(Fare),
+            SD = sd(Fare))
+```
+
+```{r}
+train %>% 
+  group_by(SibSp) %>% 
+  summarise(Fare_mean = mean(Fare),
+            Fare_median = median(Fare),
+            SD = sd(Fare))
+```
+
+
+```{r}
+# impute mean based on Pclass
+rec <- rec %>% 
+  step_impute_bag(impute_with = Pclass)
+```
+
+
+
+```{r}
+train %>% mutate(across(c(Pclass, SibSp, Parch), fct_inseq))
+```
+
+
 
 ### Age
-
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r age_sex_survival_histogram,echo=FALSE, message=FALSE, warning=FALSE}
 train %>% 
   mutate(Survived = case_match(Survived,
                               "0" ~ "deceased",
@@ -294,23 +335,30 @@ train %>%
                      bin = 50),
                  color = "black") +
   labs(title = "Age distribution of male and female passengers",
-     y = "Age",
-     x = "Class",
+     y = "Count",
+     x = "Age",
      fill = "Survival status") +
   facet_grid(Sex ~ .) +
-  theme_minimal() +
   scale_fill_brewer(palette = "Dark2", type = "qual")
+```
+#### Age distribution for each sex
+```{r}
+train %>% 
+  filter(!is.na(Age)) %>% 
+  ggplot(aes(Sex, Age)) +
+  geom_boxplot(aes(color = Sex)) +
+  scale_color_brewer(palette = "Dark2", type = "qual")
 ```
 
 #### Age distribution for both sexes in each passenger class
-```{r echo=FALSE, warning=FALSE}
+```{r age_sex_survival_boxplot, echo=FALSE, warning=FALSE}
 train %>% 
   mutate(Survived = case_match(Survived,
                               "0" ~ "deceased",
                               "1" ~ "survived")) %>% 
   ggplot(aes(x = fct_inseq(Pclass), 
              y = Age)) +
-  geom_boxjitter(aes(fill = Survived),
+  ggpol::geom_boxjitter(aes(fill = Survived),
                  position = position_dodge(width = 0.5),
                  width = 0.4,
                  jitter.shape = 21,
@@ -323,8 +371,7 @@ train %>%
        x = "Passenger class",
        fill = "Survival status") +
   facet_grid(~Sex) + 
-  theme_minimal() +
-  scale_fill_brewer(palette = "Dark2", type = "qual")
+  RColorBrewer::scale_fill_brewer(palette = "Dark2", type = "qual")
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -343,15 +390,14 @@ train %>%
            position = position_dodge(width = 0.6)) +
   labs(title = "Survival based on Passenger Class and Sex",
        y = "Passengers [%]",
-       x = "Class/Sex",
+       x = "Class.Sex",
        fill = "Survival status") +
-  theme_minimal() +
-  scale_fill_brewer(palette = "Dark2", type = "qual")
+  RColorBrewer::scale_fill_brewer(palette = "Dark2", type = "qual")
 ```
 
 
 ### Embarked
-```{r echo=FALSE, message=FALSE}
+```{r embarked_survival_barplot, echo=FALSE, message=FALSE}
 train %>% 
   filter(!is.na(Embarked)) %>% 
   group_by(Embarked, Survived) %>% 
@@ -372,12 +418,11 @@ train %>%
          fill = "Survival status") +
   geom_label(position = position_stack(0.5),
              show.legend = FALSE) +
-  theme_minimal() +
   scale_fill_brewer(palette = "Dark2", type = "qual")
   
 ```
 
-```{r echo=FALSE, message=FALSE}
+```{r embarked_pclass_barplot, echo=FALSE, message=FALSE}
 train %>% 
   filter(!is.na(Embarked)) %>%
   group_by(Embarked, Pclass) %>%
@@ -391,13 +436,30 @@ train %>%
        y = "Passengers [%]",
        x = "Place of embarkation",
        fill = "Class") +
-  theme_minimal() +
   scale_fill_brewer(palette = "Dark2", type = "qual")
   
 ```
 
 
 ### Ticket
+```{r}
+train %>% 
+  group_by(Ticket) %>% 
+  filter(n() > 1) %>% 
+  select(c(Ticket, Pclass, SibSp, Parch, Fare, Survived)) %>% 
+  mutate(across(c(SibSp, Parch), as.numeric),
+         WithFamily = SibSp + Parch) %>%
+  ungroup() %>% 
+  distinct(Ticket, .keep_all = TRUE) %>% 
+```
+```{r}
+train %>% 
+  group_by(Ticket) %>% 
+  filter(n() > 1) %>% 
+  ungroup() %>% 
+  count(Pclass, Survived)
+```
+
 The ticket column contains numeric and mixed entries. We will investigate whether there are any differences in the ticket types, i.e. numeric vs. non-numeric, between different starting integers, different strings of the non-numeric, etc. First we will separate numeric and non-numeric types and group the ticket types based on strings and first integers.
 
 ```{r echo=TRUE, warning=FALSE}
@@ -428,7 +490,7 @@ train %>%
 # group tickets by their first number or letter
 train %>% 
   mutate(Ticket_class = str_extract(Ticket, "^\\S{1}")) %>% 
-  group_by(Ticket_class) %>% 
+  group_by(Ticket_class)
   # count(Survived, Numeric_ticket, name = "Count") %>% 
   # group_by(Numeric_ticket) %>% 
   # mutate(Percentage = round(Count*100/sum(Count))) %>% 
@@ -466,37 +528,59 @@ Sex and passenger class are highly correlated with survival.
 
 The cabin variable has too many missing values to directly impute them. 
 
-The proportion of missing values in the variables "Embarked", "Fare" and "Age" is low enough to impute them.
-
 Passenger ID and Ticket can also be dropped as they hold no predictive value.
 
 
-## Model recipe
-
-- Remove PassengerID, Cabin, Ticket
-- Encode categorical features
-- Transform and scale numeric features
--Impute missing values in 
-  - Embarked
-  - Age
-  - Fare
 
 
-```{r cv_folds}
-# create folds for cross-validation
-set.seed(123)
-train_folds <- vfold_cv(data = train, repeats = 2)
+```{r}
+base_rec <- 
+  base_rec %>%
+  update_role(Ticket, PassengerId, Cabin, Name, new_role = "info_var")
 
-train_folds
+summary(base_rec) %>% arrange(desc(role))
+```
+
+```{r}
+age_pre <- ggplot(train, aes(Age)) +
+  geom_density(na.rm = TRUE)
+
+fare_pre <- 
+  ggplot(train, aes(log(Fare))) +
+  geom_density(na.rm = TRUE)
+  
+ggpubr::ggarrange(age_pre, fare_pre, ncol = 2, labels = )
 ```
 
 ```{r recipe}
 #  create recipe
-rec <- recipe(Survived ~ ., train) %>% 
-  step_select(!c(starts_with("Ticket"), Passenger_ID, Cabin)) %>% 
+# Impute
+# Handle factor levels
+# Individual transformations for skewness and other issues
+# Discretize (if needed and if you have no other choice)
+# Create dummy variables
+# Create interactions
+# Normalization steps (center, scale, range, etc)
+# Multivariate transformation (e.g. PCA, spatial sign, etc)
+
+rec <- base_rec %>% 
+  # imputation
   step_impute_mode(Embarked) %>% 
-  step_impute_knn(Age, neighbors = 3) %>% 
+  step_impute_bag(Age)
+  step_mutate(Fare = sub(0, NA, Fare)) %>% 
+  step_impute_bag(Age) %>% 
+  # factor levels
+  step_other(SibSp, Parch, threshold = .05, other = "other") %>% 
+  # transformation
+  step_log(Fare) %>% 
+  # Create dummy variables
+  step_dummy(all_factor_predictors()) %>% 
+
+  step
+
 ```
+
+
 
 ```{r recipe_titles}
 rec <- recipe(Survived ~ ., train) %>% 
@@ -511,117 +595,22 @@ rec <- recipe(Survived ~ ., train) %>%
                   neighbors = 3) 
 ```
 
-### Imputation
-
-#### Fare
-```{r echo=FALSE, warning=FALSE}
-train%>% 
-  ggplot(aes(x = fct_inseq(Pclass),
-             y = Fare,
-             fill = Pclass)) +
-  geom_boxplot() +
-  labs(title = "Fares in each passenger class",
-       y = "Fare",
-       x = "Passenger class") +
-  theme_minimal() + 
-  theme(legend.position = "none")
+```{r eval=FALSE}
+titanic_rec <- rec %>% 
+  
 ```
 
 ```{r}
-train%>% 
-  group_by(Pclass) %>% 
-  summarise(Count = n(),
-            Mean_fare = round(mean(Fare, na.rm = TRUE), 1),
-            Median_fare = median(Fare, na.rm = TRUE)) 
+
 ```
 
-From the differences between mean and median as well as the box plot above we see few but significant outliers. 
-Fare is also correlated with passenger family size. Let us look at the fares across different family sizes in each passenger class.
-
-```{r echo=FALSE}
-train%>% 
-  filter(!is.na(Fare)) %>% 
-  ggplot(aes(x = fct_inseq(SibSp),
-             y = Fare,
-             fill = factor(SibSp))) +
-  geom_boxplot() +
-  labs(title = "Per class fares for passengers travelling with family",
-       y = "Fare",
-       x = "Siblings/Spouse") +
-  facet_wrap(~fct_inseq(Pclass)) +
-  theme_minimal() +
-  theme(legend.position = "none") 
-```
-
-```{r echo=FALSE}
-train %>% 
-  filter(!is.na(Fare)) %>% 
-  ggplot(aes(x = fct_inseq(Parch),
-             y = Fare,
-             fill = fct_inseq(Parch))) +
-  geom_boxplot() +
-  labs(title = "Per class fares for passengers travelling with parents/children",
-       y = "Fare",
-       x = "Parents/Children") +
-  facet_wrap(~Pclass) +
-  theme_minimal() +
-  theme(legend.position = "none") 
-```
-
-We can now examine some summary statistics to make a sound decision on how we want to impute.
-```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-train %>% 
-  group_by(Pclass, Parch) %>% 
-  summarise(Fare_median = median(Fare, na.rm = TRUE),
-            Fare_mean = mean(Fare, na.rm = TRUE),
-            SD = sd(Fare, na.rm = TRUE),
-            Count = n())
-```
-Due to the large standard deviation in class 1 we choose the median for imputation of fares. 
-Again we will create a function for the imputation.
-```{r Fare imputation, echo=TRUE}
-impute_fare <- function(df, na.rm = FALSE){
-  
-  grouped_median_fares <- df %>% 
-    group_by(Pclass, Parch) %>% 
-    summarise(Fare_median = median(Fare, na.rm = TRUE),
-              .groups = "drop") 
-  
-  df <- df %>%
-    left_join(grouped_median_fares, by = c("Pclass", "Parch")) %>% 
-    mutate(Fare = coalesce(Fare, Fare_median)) %>%
-    select(-Fare_median)
-    
-  return(df)
-}
-```
-
-
-Check missing values before and after imputation.
-```{r echo=FALSE}
-train_imputed %>% 
-  group_by(Pclass) %>% 
-  summarise(Missing = sum(is.na(Fare))) %>% 
-  kable("simple")
-```
-
-```{r echo=FALSE}
-impute_fare(train_imputed) %>% 
-  group_by(Pclass) %>% 
-  summarise(Missing = sum(is.na(Fare))) %>% 
-  kable("simple")
-```
-
-
-```{r message=FALSE, warning=FALSE}
-train_imputed <- impute_fare(train_imputed)
-```
+### Imputation
 
 
 #### Age 
 
-For the imputation of age, we will extract the titles from inside the name column. 
-Then we will create title groups and calculate the mean and standard deviation for each, from which we will sample and impute. 
+For the imputation of age, extract the titles the name column. 
+Then create title groups and calculate the mean and standard deviation for each and then use these to sample and impute from. 
 
 ```{r}
 options(tibble.print_max = 17, tibble.print_min = 4)
@@ -1037,21 +1026,6 @@ train_imputed %>%
 
 ### Feature encoding and scaling
 
-In this section we will encode categorical variables.
-We will use the fastDummies package to make quick work of encoding all character and factor columns.
-Also, we remove the first dummy column to avoid multicollinearity issues down the line.
-```{r echo=TRUE}
-train_fe <- train_imputed %>% 
-  mutate(SibSp = as.factor(SibSp),
-         Parch = as.factor(Parch)) %>% 
-  fastDummies::dummy_columns(remove_first_dummy = TRUE,
-                             remove_selected_columns = TRUE)
-```
-
-```{r echo=FALSE}
-str(train_fe)
-```
-
 In our approach we will compare different classification techniques.
 While tree-based models are insensitive to different feature scales and outliers, distance-based models like k-nearest neighbors will perform better when features are scaled uniformly.
 There are still two numeric variables in the data: fare and age. 
@@ -1253,7 +1227,7 @@ clean_and_impute <- function(df, na.rm = FALSE){
 
 ```{r}
 # specify models
-glm_spec <- logistic_reg() %>% set_engine("glm")
+lg_spec <- logistic_reg(penalty = tune(), mixture = 1) %>% set_engine("glm")
 
 rf_spec <- rand_forest(trees = 100) %>% set_engine("ranger") %>% set_mode("classification")
 
