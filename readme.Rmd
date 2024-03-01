@@ -40,8 +40,8 @@ theme_set(theme_minimal())
 
 Load data
 ```{r load_data, warning=FALSE}
-train <- read_csv("./Data/train.csv", col_types = "nffcfnffcnff")
-test <- read_csv("./Data/test.csv", col_types = "nffcfnffcnff")
+train <- read_csv("./Data/train.csv", col_types = "nffcfnffcncf")
+test <- read_csv("./Data/test.csv", col_types = "nffcfnffcncf")
 ```
 
 ## Exploratory data analysis
@@ -79,7 +79,8 @@ train <- train %>%
       ~if_else(. %in% c("", " "), NA, .)
     ),
     # encode 0 values in fare
-    Fare = if_else(Fare == 0, NA, Fare)
+    Fare = if_else(Fare == 0, NA, Fare),
+    across(c(SibSp, Parch, Pclass), fct_inseq)
   )
 ```
 
@@ -98,54 +99,52 @@ train_folds
 ```
 
 
-
 ### Numeric variables
 ```{r}
-plot_vars <- function(variables, geom) {
+plot_vars <- function(variable_type) {
   
-  numeric_plots <- list()
+  vars <- train %>% 
+    select(where(paste0("is.", as_string(variable_type)))) %>% 
+    names()
   
-  # add fill and geom selection based on column type
+  geom <- NULL
   
+  fill_scale <- NULL
   
+  plots <- list()
+  
+  if (variable_type == "double") {
+    geom <-  geom_density()
+  } else {
+    geom <-  geom_bar()
+    fill_scale <- scale_fill_brewer(palette = "Dark2", type = "qual")   
+  }
 
-  for (i in seq_along(variables)) {
+  for (i in seq_along(vars)) {
     
-    var <- variables[i]
+    var <- vars[i]
     
     p <- train %>% 
       filter(!is.na(!!rlang::sym(var))) %>% 
-      ggplot(aes_string(x = var)) +
-      geom(color = "white") +
+      ggplot(aes_string(x = var,
+                        fill = var)) +
+      geom +
       labs(title = paste("Distribution of", var),
          y = "Count",
          x = var) +
-      theme(legend.position = "none")
+      theme(legend.position = "none") +
+      fill_scale
     
-    numeric_plots <- append(numeric_plots, list(p))
+    plots <- append(plots, list(p))
   }
   
-  do.call(grid.arrange, c(numeric_plots, ncol = 1))
+  do.call(gridExtra::grid.arrange, c(plots, ncol = 2))
     
 }
 ```
 
 ```{r}
-dub_vars <- train %>% 
-  select(where(is.double)) %>% 
-  names()
-
-int_vars <- train %>% 
-  select(where(is.double)) %>% 
-  names()
-
-cat_vars <- train %>% 
-  select(where(is.double)) %>% 
-  names()
-
-
-plot_vars(dub_vars, geom_histogram)
-plot_vars()
+plot_vars("numeric")
 ```
 
 ### Correlation map
